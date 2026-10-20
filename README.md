@@ -133,6 +133,10 @@ Todo aparece en el mapa 3D, en la vista en planta y en el dibujo del panel de in
 - **Forma:** en Ajustes → Almacenes → «Forma del almacén», el contorno puede ser un rectángulo o un polígono (formas rápidas en L, U y T, ajustables vértice a vértice). Las paredes del mapa siguen el contorno, y las puertas se colocan en cualquiera de sus tramos.
 - **Plantas y altillos:** cada altillo tiene nombre, altura y superficie. Con «Editando: …» se elige la planta a la que van las estanterías, zonas y elementos que se añaden. En el mapa 3D el altillo aparece como una plataforma con pilares y su contenido encima, y el selector «Planta» muestra todas o solo una. El nombre de la ubicación indica la planta, por ejemplo «Estantería M1 (Altillo)».
 
+## Mapa 3D
+
+Dos estilos, a elegir en el panel del mapa (se recuerda en cada navegador): **Realista** (estanterías con puntales y largueros, baldas, arriostramientos, cajas de cartón con la franja de su categoría, sombras y suelo de hormigón) y **Esquemático** (cubos del color de cada categoría). Vistas isométrica, superior y frontal, brújula, pantalla completa y botón para guardar una imagen PNG. La cámara se mueve con suavidad y entra con una animación al abrir el mapa.
+
 ## Ruta de recogida y mapa de calor
 
 - **Ruta en el mapa:** en un pedido en preparación, el botón «Ruta en el mapa» dibuja en el mapa 3D el recorrido desde la primera puerta del almacén por cada ubicación con material reservado, en el orden más corto (vecino más cercano mejorado con 2-opt, distancias en ángulo recto). El panel lateral lista las paradas con lo que hay que coger en cada balda. Al confirmar la recogida, las paradas pasan a verde en tiempo real.

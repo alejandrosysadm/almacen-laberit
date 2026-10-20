@@ -53,6 +53,7 @@ const ICONS = {
   send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
   columns:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
   shield:'<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
+  expand:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   camera:'<path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/>',
   truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
   clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
@@ -1610,7 +1611,9 @@ function auditTableHTML() {
 const SHELF_H = 0.62, RACK_D = 1.1, CUBE = 0.32, STEP = 0.4;
 VIEWS.mapa = () => `<div class="page-head"><div><h1>Mapa 3D del almacén</h1><p>Haz clic en una estantería o zona para ver qué contiene.</p></div>
   ${Auth.can('settings.manage') ? `<a class="btn" href="#/ajustes/almacen">${ico('cog')}Editar distribución</a>` : ''}</div>
-  <div class="map-wrap"><div class="map-stage" id="map-stage"><div class="map-tools"><button class="btn sm" data-act="mapTop">${ico('top')}Vista superior</button><button class="btn sm" data-act="mapReset">${ico('reset')}Restablecer</button></div><div class="map-tip hide" id="map-tip"></div><div class="map-hint">Arrastra para girar · Mayús o botón derecho para desplazar · Rueda para acercar</div></div>
+  <div class="map-wrap"><div class="map-stage" id="map-stage"><div class="map-tools"><div class="seg map-views"><button data-act="mapReset" title="Vista isométrica">Isométrica</button><button data-act="mapTop" title="Vista desde arriba">Superior</button><button data-act="mapFront" title="Vista de frente">Frontal</button></div>
+    <button class="btn sm icon" data-act="mapFull" title="Pantalla completa" aria-label="Pantalla completa">${ico('expand')}</button><button class="btn sm icon" data-act="mapShot" title="Guardar imagen" aria-label="Guardar imagen">${ico('camera')}</button></div>
+    <div class="map-compass" title="Orientación"><svg viewBox="0 0 40 40" id="map-compass"><circle cx="20" cy="20" r="18"/><path d="M20 5l5 15h-10z" class="n"/><path d="M20 35l-5-15h10z"/></svg><span>Fondo</span></div><div class="map-tip hide" id="map-tip"></div><div class="map-hint">Arrastra para girar · Mayús o botón derecho para desplazar · Rueda para acercar</div></div>
   <aside class="map-side" id="map-side"></aside></div>`;
 const inMapAlm = i => almOfItem(i) === mapAlm() || (!i.data.cliente && !i.data.almacen && mapAlm() === (almacenes()[0] || {}).id);
 function mapVisibleItems() {
@@ -1633,6 +1636,7 @@ function renderMapSide() {
   }
   side.innerHTML = routePanelHTML() + `<section class="panel"><div class="panel-b" style="display:flex;flex-direction:column;gap:12px">
       ${(curLayout().plantas || []).length ? `<label class="f">Planta<select class="sel sm" id="map-planta"><option value="">Todas</option><option value="0" ${S.mapPlanta === '0' ? 'selected' : ''}>Planta baja</option>${curLayout().plantas.map(p => `<option value="${esc(p.id)}" ${S.mapPlanta === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></label>` : ''}
+      <div class="f"><span>Estilo</span><div class="seg">${[['real', 'Realista'], ['plain', 'Esquemático']].map(([k, l]) => `<button data-act="mapStyle" data-k="${k}" class="${(Map3D.real() ? 'real' : 'plain') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
       <label class="f">Colorear estanterías por<select class="sel sm" id="map-heat"><option value="">Nada</option>${Object.entries(HEAT_MODES).map(([k, l]) => `<option value="${k}" ${S.mapHeat === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       ${S.mapHeat ? `<div class="heat-leg"><span class="help">${S.mapHeat === 'occ' ? 'Vacía' : S.mapHeat === 'age' ? 'Reciente' : 'Poco'}</span><i style="background:linear-gradient(90deg,${heatColor(0)},${heatColor(0.5)},${heatColor(1)})"></i><span class="help">${S.mapHeat === 'occ' ? 'Llena' : S.mapHeat === 'age' ? '1 año o más' : 'Mucho'}</span></div>` : ''}
       <label class="f">Localizar número de serie<span class="selwrap"><input class="inp" id="map-q" placeholder="Escanea o escribe…" value="${esc(S.mapQ)}" autocomplete="off">${scanBtn('map-q', false, 'Localizar en el mapa')}</span></label>
@@ -1656,13 +1660,19 @@ const Map3D = {
     try { r = new THREE.WebGLRenderer({antialias:true}); } catch { el.insertAdjacentHTML('beforeend', '<div class="empty">Este dispositivo no admite gráficos 3D (WebGL).</div>'); return; }
     this.el = el; this.renderer = r;
     r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    if (this.real()) { r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; }
     r.setSize(el.clientWidth || 600, el.clientHeight || 400);
     el.insertBefore(r.domElement, el.firstChild);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(42, (el.clientWidth || 600) / (el.clientHeight || 400), 0.1, 600);
     this.resetView(false);
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x9a9aa2, 0.95));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.55); dl.position.set(14, 30, 18); this.scene.add(dl);
+    // Entrada: la cámara llega volando desde lejos.
+    this.cur = {r: this.sph.r * 1.9, theta: this.sph.theta - 0.7, phi: 0.35, x: 0, y: 0, z: 0};
+    const real = this.real();
+    this.hemi = new THREE.HemisphereLight(0xffffff, real ? 0x9a9895 : 0x9a9aa2, real ? 0.78 : 0.95); this.scene.add(this.hemi);
+    const dl = new THREE.DirectionalLight(0xfff8f0, real ? 0.62 : 0.55); dl.position.set(16, 34, 20); this.sun = dl;
+    if (real) { dl.castShadow = true; dl.shadow.mapSize.set(2048, 2048); dl.shadow.bias = -0.0004; dl.shadow.normalBias = 0.02; dl.shadow.radius = 4; }
+    this.scene.add(dl); this.scene.add(dl.target);
     this.root = new THREE.Group(); this.scene.add(this.root);
     this.mounted = true;
     this.build(); this.bind();
@@ -1678,6 +1688,39 @@ const Map3D = {
   },
   disposeTree(o) { if (!o) return; o.traverse(n => { if (n.geometry) n.geometry.dispose(); if (n.material) { (Array.isArray(n.material) ? n.material : [n.material]).forEach(m => { m.map && m.map.dispose(); m.dispose(); }); } }); },
   resetView(anim = true) { const L = curLayout(); this.target = new THREE.Vector3(0, 0, 0); this.sph = {r: Math.max(L.width, L.depth) * 1.15, theta: 0.55, phi: 0.95}; },
+  real() { return (S.mapStyle || LS.get('lbinv.mapStyle', 'real')) !== 'plain'; },
+  // Textura procedural de hormigón (gris) que se tiñe con el color del suelo del tema.
+  concrete() {
+    if (this._concrete) return this._concrete;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+    g.fillStyle = '#d9d9d9'; g.fillRect(0, 0, 256, 256);
+    const img = g.getImageData(0, 0, 256, 256), d = img.data;
+    for (let i = 0; i < d.length; i += 4) { const n = 236 + (Math.random() - 0.5) * 14; d[i] = d[i + 1] = d[i + 2] = n; }
+    g.putImageData(img, 0, 0);
+    for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${0.008 + Math.random() * 0.016})`; g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 4 + Math.random() * 22, 0, 7); g.fill(); }
+    const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+    return (this._concrete = t);
+  },
+  // Caja de cartón con una franja del color de su categoría.
+  boxTex(color) {
+    this._boxTex = this._boxTex || {}; if (this._boxTex[color]) return this._boxTex[color];
+    const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+    g.fillStyle = '#c69c6d'; g.fillRect(0, 0, 128, 128);
+    for (let k = 0; k < 700; k++) { g.fillStyle = `rgba(${Math.random() < 0.5 ? '90,60,30' : '255,240,210'},${Math.random() * 0.08})`; g.fillRect(Math.random() * 128, Math.random() * 128, 2, 2); }
+    g.fillStyle = 'rgba(255,248,230,0.35)'; g.fillRect(54, 0, 20, 128);
+    g.fillStyle = color; g.fillRect(0, 84, 128, 26);
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.fillRect(10, 90, 46, 4); g.fillRect(10, 98, 30, 4);
+    g.strokeStyle = 'rgba(80,55,30,0.45)'; g.lineWidth = 4; g.strokeRect(2, 2, 124, 124);
+    const t = new THREE.CanvasTexture(cv); t.anisotropy = 4;
+    return (this._boxTex[color] = t);
+  },
+  bg(c) {
+    if (!this.real()) return new THREE.Color(c.bg);
+    const cv = document.createElement('canvas'); cv.width = 4; cv.height = 256; const g = cv.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 0, 256); const dark = (document.documentElement.dataset.theme === 'dark') || (!document.documentElement.dataset.theme && matchMedia('(prefers-color-scheme: dark)').matches);
+    gr.addColorStop(0, dark ? '#1b1d22' : '#eef1f5'); gr.addColorStop(1, dark ? '#0f1013' : '#d7dbe1'); g.fillStyle = gr; g.fillRect(0, 0, 4, 256);
+    return new THREE.CanvasTexture(cv);
+  },
   colors() {
     const cs = getComputedStyle(document.documentElement); const g = k => cs.getPropertyValue(k).trim() || '#888';
     return {bg:g('--paper'), floor:g('--floor'), grid:g('--grid'), shelf:g('--shelf'), red:g('--red'), ink:g('--ink'), muted:g('--muted'), paper:g('--paper')};
@@ -1696,10 +1739,25 @@ const Map3D = {
     if (!this.mounted) return;
     this.disposeTree(this.root); this.root.clear();
     const L = curLayout(), c = this.colors();
-    this.c = c; this.scene.background = new THREE.Color(c.bg);
-    const floorGeo = isShaped(L) ? new THREE.ShapeGeometry(new THREE.Shape(floorPoly(L).map(p => new THREE.Vector2(p[0], -p[1])))) : new THREE.PlaneGeometry(L.width, L.depth);
-    const floor = new THREE.Mesh(floorGeo, new THREE.MeshLambertMaterial({color:c.floor}));
-    floor.rotation.x = -Math.PI / 2; this.root.add(floor);
+    this.c = c; const real = this.real();
+    if (this.scene.background && this.scene.background.dispose) this.scene.background.dispose();
+    this.scene.background = this.bg(c);
+    const maxD = Math.max(L.width, L.depth);
+    this.scene.fog = real ? new THREE.Fog(new THREE.Color(document.documentElement.dataset.theme === 'dark' ? '#121316' : '#dfe3e8'), maxD * 2.2, maxD * 5.5) : null;
+    if (real && this.sun) { const sc = this.sun.shadow.camera, m = maxD * 0.75; sc.left = -m; sc.right = m; sc.top = m; sc.bottom = -m; sc.near = 1; sc.far = 120; sc.updateProjectionMatrix(); }
+    const shape = new THREE.Shape(floorPoly(L).map(p => new THREE.Vector2(p[0], -p[1])));
+    const floorGeo = isShaped(L) ? new THREE.ShapeGeometry(shape) : new THREE.PlaneGeometry(L.width, L.depth);
+    let floorMat;
+    if (real) { const tx = this.concrete(); tx.repeat.set(L.width / 6, L.depth / 6); floorMat = new THREE.MeshStandardMaterial({color: c.floor, map: tx, roughness: 0.92, metalness: 0}); }
+    else floorMat = new THREE.MeshLambertMaterial({color:c.floor});
+    if (real && isShaped(L)) { const uv = floorGeo.attributes.uv, pos = floorGeo.attributes.position; for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + L.width / 2) / L.width, (pos.getY(i) + L.depth / 2) / L.depth); }
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = real; this.root.add(floor);
+    if (real) {
+      // Base con grosor, como una maqueta.
+      const base = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, {depth: 0.35, bevelEnabled: false}), new THREE.MeshStandardMaterial({color: new THREE.Color(c.shelf).multiplyScalar(0.82), roughness: 0.8}));
+      base.rotation.x = -Math.PI / 2; base.position.y = -0.36; this.root.add(base);
+    }
     if (L.plan && L.plan.image) {
       // Plano de fondo sobre el suelo.
       const tex = new THREE.TextureLoader().load(L.plan.image, () => { this.dirty = true; });
@@ -1710,12 +1768,13 @@ const Map3D = {
     for (let x = -L.width / 2; x <= L.width / 2 + 0.01; x += 2) pts.push(x, 0.005, -L.depth / 2, x, 0.005, L.depth / 2);
     for (let z = -L.depth / 2; z <= L.depth / 2 + 0.01; z += 2) pts.push(-L.width / 2, 0.005, z, L.width / 2, 0.005, z);
     const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    this.root.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({color:c.grid})));
-    const wallMat = new THREE.MeshLambertMaterial({color:c.shelf});
+    this.root.add(new THREE.LineSegments(gg, new THREE.LineBasicMaterial({color:c.grid, transparent: real, opacity: real ? 0.28 : 1})));
+    const wallMat = real ? new THREE.MeshStandardMaterial({color: c.shelf, roughness: 0.85}) : new THREE.MeshLambertMaterial({color:c.shelf});
+    const WH = real ? 0.9 : 0.5;
     wallSegs(L).forEach(([a, b]) => {
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]); if (len < 0.01) return;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(len + 0.15, 0.5, 0.15), wallMat);
-      m.position.set((a[0] + b[0]) / 2, 0.25, (a[1] + b[1]) / 2); m.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); this.root.add(m);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len + 0.15, WH, 0.15), wallMat);
+      m.position.set((a[0] + b[0]) / 2, WH / 2, (a[1] + b[1]) / 2); m.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); m.castShadow = m.receiveShadow = real; this.root.add(m);
     });
     const doorMat = new THREE.MeshLambertMaterial({color: new THREE.Color(c.red)});
     doorGeom(L).forEach(g => {
@@ -1765,16 +1824,29 @@ const Map3D = {
       const rail = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, 1, d)), new THREE.LineBasicMaterial({color: new THREE.Color(c.muted), transparent: true, opacity: 0.5})); rail.position.set(x, al + 0.5, z); this.root.add(rail);
       const lb = this.label(p.nombre || 'Altillo', '#ffffff', c.ink, 1.1); lb.position.set(x - w / 2 + 1.2, al + 1.5, z + d / 2 - 0.4); this.root.add(lb);
     });
-    const upMat = new THREE.MeshLambertMaterial({color:new THREE.Color(c.red)});
-    const shMat = new THREE.MeshLambertMaterial({color:new THREE.Color(c.shelf)});
+    const upMat = real ? new THREE.MeshStandardMaterial({color: '#2b5c8f', metalness: 0.55, roughness: 0.45}) : new THREE.MeshLambertMaterial({color:new THREE.Color(c.red)});
+    const shMat = real ? new THREE.MeshStandardMaterial({color: '#c9ced4', metalness: 0.5, roughness: 0.55}) : new THREE.MeshLambertMaterial({color:new THREE.Color(c.shelf)});
+    const beamMat = new THREE.MeshStandardMaterial({color: '#e2711d', metalness: 0.35, roughness: 0.5});
+    const sh = o => { if (real) { o.castShadow = true; o.receiveShadow = true; } return o; };
     L.racks.filter(mapPlantaVis).forEach(rk => {
       const ownElev = Math.max(0, Number(rk.elev) || 0), base = plantaAlt(L, rk.planta), elev = ownElev + base;
       const g = new THREE.Group(); g.position.set(rk.x, elev, rk.z); g.rotation.y = -(rk.rot || 0) * Math.PI / 180;
       const len = rk.len || 4, lv = Math.max(1, rk.levels || 4), H = lv * SHELF_H + 0.25;
-      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => { const u = new THREE.Mesh(new THREE.BoxGeometry(0.07, H, 0.07), upMat); u.position.set(sx * (len / 2 - 0.035), H / 2, sz * (RACK_D / 2 - 0.035)); g.add(u); });
+      [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => { const u = sh(new THREE.Mesh(new THREE.BoxGeometry(real ? 0.08 : 0.07, H, real ? 0.06 : 0.07), upMat)); u.position.set(sx * (len / 2 - 0.035), H / 2, sz * (RACK_D / 2 - 0.035)); g.add(u);
+        if (real) { const fp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.012, 0.14), upMat); fp.position.set(sx * (len / 2 - 0.035), 0.006, sz * (RACK_D / 2 - 0.035)); g.add(fp); } });
+      if (real) {
+        // Largueros naranjas delante y detrás de cada nivel, y arriostramientos en los laterales.
+        for (let i = 0; i < lv; i++) [-1, 1].forEach(sz => { const b = sh(new THREE.Mesh(new THREE.BoxGeometry(len - 0.08, 0.09, 0.045), beamMat)); b.position.set(0, 0.12 + i * SHELF_H - 0.03, sz * (RACK_D / 2 - 0.03)); g.add(b); });
+        [-1, 1].forEach(sx => {
+          const x = sx * (len / 2 - 0.035), span = RACK_D - 0.07, n = Math.max(1, Math.round(H / 0.9));
+          for (let k = 0; k < n; k++) { const y0 = 0.15 + k * (H - 0.2) / n, y1 = 0.15 + (k + 1) * (H - 0.2) / n, dh = y1 - y0, ln = Math.hypot(span, dh);
+            const br = new THREE.Mesh(new THREE.BoxGeometry(0.025, ln, 0.025), upMat); br.position.set(x, (y0 + y1) / 2, 0); br.rotation.x = (k % 2 ? 1 : -1) * Math.atan2(span, dh); g.add(br);
+            const hz = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, span), upMat); hz.position.set(x, y0, 0); g.add(hz); }
+        });
+      }
       const nh = Math.max(0, Math.round(Number(rk.huecos) || 0));
       if (nh > 1) for (let i = 0; i < lv; i++) for (let k = 1; k < nh; k++) { const dv = new THREE.Mesh(new THREE.BoxGeometry(0.02, SHELF_H - 0.1, RACK_D), shMat); dv.position.set(-len / 2 + k * len / nh, 0.12 + i * SHELF_H + (SHELF_H - 0.1) / 2, 0); g.add(dv); }
-      for (let i = 0; i < lv; i++) { const s = new THREE.Mesh(new THREE.BoxGeometry(len, 0.045, RACK_D), shMat); s.position.set(0, 0.12 + i * SHELF_H, 0); g.add(s); }
+      for (let i = 0; i < lv; i++) { const s = sh(new THREE.Mesh(new THREE.BoxGeometry(real ? len - 0.1 : len, real ? 0.025 : 0.045, real ? RACK_D - 0.08 : RACK_D), shMat)); s.position.set(0, 0.12 + i * SHELF_H, 0); g.add(s); }
       const hitGeo = new THREE.BoxGeometry(len, H, RACK_D);
       const hit = new THREE.Mesh(hitGeo, new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false}));
       hit.position.y = H / 2; hit.userData.loc = rk.id; g.add(hit); this.hits.push(hit);
@@ -1798,8 +1870,9 @@ const Map3D = {
     if (this.itemGroup) { this.itemGroup.parent && this.itemGroup.parent.remove(this.itemGroup); this.disposeTree(this.itemGroup); }
     const ig = new THREE.Group(); this.itemGroup = ig; this.root.add(ig);
     const geo = new THREE.BoxGeometry(CUBE, CUBE, CUBE); const mats = {};
-    const mat = cat => { const c = catById(cat); return mats[cat] || (mats[cat] = new THREE.MeshLambertMaterial({color:new THREE.Color(c ? c.color : '#888')})); };
-    const hitMat = new THREE.MeshLambertMaterial({color:new THREE.Color(this.c.red), emissive:new THREE.Color(this.c.red), emissiveIntensity:0.6});
+    const real = this.real();
+    const mat = cat => { const c = catById(cat), col = c ? c.color : '#888'; return mats[cat] || (mats[cat] = real ? new THREE.MeshStandardMaterial({map: this.boxTex(col), roughness: 0.85, metalness: 0}) : new THREE.MeshLambertMaterial({color:new THREE.Color(col)})); };
+    const hitMat = new THREE.MeshStandardMaterial({color:new THREE.Color(this.c.red), emissive:new THREE.Color(this.c.red), emissiveIntensity:0.7});
     this.hitMeshes = [];
     const by = {};
     mapVisibleItems().forEach(i => {
@@ -1846,6 +1919,8 @@ const Map3D = {
       }
     });
     this._mats = mats;
+    if (real) this.root.traverse(o => { if (o.isMesh && o.userData.item !== undefined) { o.castShadow = true; o.receiveShadow = true; } });
+    ig.traverse(o => { if (o.isMesh && real) { o.castShadow = true; o.receiveShadow = true; } });
   },
   applyHeat() {
     if (!this.mounted) return;
@@ -1892,9 +1967,16 @@ const Map3D = {
     if (focus && this.locs[id]) { const l = this.locs[id]; const p = l.kind === 'rack' ? l.rk : l.z; this.target.set(p.x, 0, p.z); this.sph.r = Math.min(this.sph.r, 18); }
   },
   frame(t) {
-    const {r, theta, phi} = this.sph;
-    this.camera.position.set(this.target.x + r * Math.sin(phi) * Math.sin(theta), this.target.y + r * Math.cos(phi), this.target.z + r * Math.sin(phi) * Math.cos(theta));
-    this.camera.lookAt(this.target);
+    // Movimiento suave: la cámara se acerca poco a poco a la posición pedida.
+    const C = this.cur = this.cur || {r: this.sph.r, theta: this.sph.theta, phi: this.sph.phi, x: this.target.x, y: this.target.y, z: this.target.z};
+    const k = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.14;
+    C.r += (this.sph.r - C.r) * k; C.theta += (this.sph.theta - C.theta) * k; C.phi += (this.sph.phi - C.phi) * k;
+    C.x += (this.target.x - C.x) * k; C.y += (this.target.y - C.y) * k; C.z += (this.target.z - C.z) * k;
+    const {r, theta, phi} = C;
+    this.camera.position.set(C.x + r * Math.sin(phi) * Math.sin(theta), C.y + r * Math.cos(phi), C.z + r * Math.sin(phi) * Math.cos(theta));
+    this.camera.lookAt(C.x, C.y, C.z);
+    if (this.sun) { this.sun.position.set(C.x + 16, 34, C.z + 20); this.sun.target.position.set(C.x, 0, C.z); }
+    const cp = document.getElementById('map-compass'); if (cp) cp.style.transform = `rotate(${(theta * 180 / Math.PI).toFixed(1)}deg)`;
     if (this.hitMeshes && this.hitMeshes.length) { const s = 1 + 0.18 * Math.sin(t / 180); this.hitMeshes.forEach(m => m.scale.set(s, s, s)); }
     this.renderer.render(this.scene, this.camera);
   },
@@ -2505,6 +2587,10 @@ const ACT = {
   mvIn: el => doMvIn(el), mvOut: el => doMvOut(el),
   exportAudit: async () => { const rows = auditFiltered().map(e => ({Fecha:fmtDT(e.t), Usuario:e.u, 'Acción':ACTION_LABEL[e.a] || e.a, Detalle:e.d})); if (!rows.length) return toast('No hay actividad que exportar.', 'warn'); await saveFile(`registro_actividad_${stamp()}.csv`, toCSV(rows), 'text/csv'); },
   mapTop: () => { Map3D.sph.phi = 0.03; Map3D.sph.theta = 0; },
+  mapFront: () => { const L = curLayout(); Map3D.sph.phi = 1.25; Map3D.sph.theta = 0; Map3D.sph.r = Math.max(L.width, L.depth) * 1.05; Map3D.target.set(0, 1, 0); },
+  mapFull: () => { const el = $('.map-stage'); if (!el) return; if (document.fullscreenElement) document.exitFullscreen(); else (el.requestFullscreen ? el.requestFullscreen() : Promise.reject()).catch(() => toast('Tu navegador no permite pantalla completa aquí.', 'warn')); },
+  mapShot: () => { if (!Map3D.mounted) return; Map3D.frame(performance.now()); Map3D.renderer.domElement.toBlob(b => { if (!b) return; const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `mapa_${slug((almById(mapAlm()) || {}).nombre || 'almacen')}_${new Date().toISOString().slice(0, 10)}.png`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }, 'image/png'); },
+  mapStyle: el => { S.mapStyle = el.dataset.k; LS.set('lbinv.mapStyle', el.dataset.k); const st = $('#map-stage'); Map3D.unmount(); Map3D._sig = null; Map3D._concrete = null; Map3D._boxTex = null; Map3D.mount(st); renderMapSide(); },
   mapReset: () => { Map3D.resetView(); },
   mapCat: el => { const all = cats().map(c => c.id); if (!S.mapCats) S.mapCats = new Set(all); const id = el.dataset.id; S.mapCats.has(id) ? S.mapCats.delete(id) : S.mapCats.add(id); if (S.mapCats.size === all.length) S.mapCats = null; Map3D.refresh(); renderMapSide(); },
   // Ajustes
