@@ -114,6 +114,8 @@ En **Ajustes → Almacenes** se crean los almacenes, cada uno con su distribuci�
 
 En **Usuarios → Editar**, cada usuario tiene **acceso total** o **solo los almacenes y clientes marcados**. Un almacén marcado sin clientes no da acceso a nada. El servidor filtra todo según ese acceso: inventario, pedidos, albaranes, registro de actividad, tiempo real y exportaciones. Lo que el usuario puede hacer dentro de su acceso lo sigue marcando su rol. Ajustes, usuarios y copias de seguridad requieren acceso total. Los administradores siempre tienen acceso total.
 
+**Responsable de almacén:** con el permiso «Configurar sus almacenes y las sedes de sus clientes» (Roles y permisos), un usuario con acceso limitado ve en Ajustes solo sus almacenes (plano, forma, estanterías, huecos, altillos, puertas y elementos) y las sedes de sus clientes. No puede crear ni borrar almacenes, asignar clientes ni tocar ajustes generales; los usuarios los gestiona el administrador.
+
 Al actualizar desde una versión anterior, se crea un «Almacén principal» con todos los clientes, y los usuarios existentes conservan el acceso total hasta que se les cambie.
 
 ## Plano y elementos del almacén

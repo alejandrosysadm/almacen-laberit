@@ -95,6 +95,7 @@ const PERMS = [
   ['map.view', 'Ver mapa 3D'],
   ['audit.view', 'Ver registro de actividad'],
   ['settings.manage', 'Cambiar ajustes, listas y categorías'],
+  ['alm.manage', 'Configurar sus almacenes y las sedes de sus clientes'],
   ['users.manage', 'Gestionar usuarios y roles']
 ];
 const FIELD_TYPES = {text:'Texto', number:'Número', select:'Lista', bool:'Sí / No', date:'Fecha', textarea:'Texto largo', location:'Ubicación'};
@@ -568,7 +569,9 @@ const S = {
   drawerId:null, mapSel:null, mapCats:null, mapClient:'', mapQ:'', mapHit:null,
   auditQ:'', auditU:'', auditA:''
 };
-const canView = v => Auth.can(VIEW_PERM[v]) && (!['ajustes', 'usuarios'].includes(v) || !Auth.user.scope || Auth.user.scope.all);
+const isTotalUser = () => !Auth.user.scope || Auth.user.scope.all;
+const fullSettings = () => Auth.can('settings.manage') && isTotalUser();
+const canView = v => v === 'ajustes' ? (fullSettings() || Auth.can('alm.manage')) : Auth.can(VIEW_PERM[v]) && (v !== 'usuarios' || isTotalUser());
 const VIEW_PERM = {inicio:'inv.view', inventario:'inv.view', movimientos:'inv.move', pedidos:'inv.view', albaranes:'inv.view', mapa:'map.view', registro:'audit.view', usuarios:'users.manage', ajustes:'settings.manage'};
 function parseHash() {
   const p = (location.hash || '#/inicio').replace(/^#\/?/, '').split('/');
@@ -1967,7 +1970,8 @@ const bid = path => 'b-' + path.replace(/[^a-zA-Z0-9_-]/g, '_');
 function bInp(path, type = 'text', attrs = '') { const v = getPath(draft(), path); return `<input class="inp sm" id="${bid(path)}" data-bind="${esc(path)}" data-type="${type}" type="${type === 'number' ? 'number' : type === 'color' ? 'color' : 'text'}" ${type === 'number' ? 'step="any"' : ''} value="${esc(v ?? '')}" ${attrs}>`; }
 function bChk(path, label, attrs = '') { return `<label class="chk"><input type="checkbox" id="${bid(path)}" data-bind="${esc(path)}" data-type="bool" ${getPath(draft(), path) ? 'checked' : ''} ${attrs}>${label ? esc(label) : ''}</label>`; }
 VIEWS.ajustes = () => {
-  if (!STABS.some(t => t[0] === S.stab)) S.stab = 'general';
+  const TABS = fullSettings() ? STABS : [['almacen', 'Almacenes'], ['clientes', 'Sedes']];
+  if (!TABS.some(t => t[0] === S.stab)) S.stab = TABS[0][0];
   const d = draft(); let body = '';
   if (S.stab === 'general') body = `<section class="panel"><div class="panel-b"><div class="fgrid">
       <label class="f">Nombre de la empresa ${bInp('company')}</label>
@@ -2042,7 +2046,7 @@ VIEWS.ajustes = () => {
         <label class="f">Teléfono ${bInp('albaran.telefono')}</label><label class="f">Correo ${bInp('albaran.email')}</label>
         <label class="f wide">Dirección ${bInp('albaran.direccion')}</label>
         <label class="f wide">Texto al pie del albarán ${bInp('albaran.pie')}<span class="help">Por ejemplo, datos registrales o condiciones de entrega.</span></label></div></div></section>
-      <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Sedes de los clientes</h3><span class="help">Destinos que aparecen en pedidos y albaranes. Los clientes se gestionan en «Listas y marcas».</span></div>
+      <!--sedes--><section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Sedes de los clientes</h3><span class="help">Destinos que aparecen en pedidos y albaranes. Los clientes se gestionan en «Listas y marcas».</span></div>
         <div class="row"><select class="sel sm" id="sede-filter" style="width:auto"><option value="">Todos los clientes</option>${cl.map(c => `<option ${f === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><button class="btn sm primary" data-act="sedeAdd">${ico('plus')}Añadir sede</button></div></div>
         ${idx.length ? `<div class="tbl-wrap"><table class="tbl ftable sedes-tbl"><thead><tr><th>Cliente</th><th>Nombre de la sede</th><th>Dirección</th><th>CP</th><th>Población</th><th>País</th><th>Contacto</th><th>Teléfono</th><th>Correo</th><th></th></tr></thead><tbody>
         ${idx.map(i => { const x = d.sedes[i], p = `sedes.${i}`; return `<tr style="cursor:default">
@@ -2052,7 +2056,7 @@ VIEWS.ajustes = () => {
           <td>${bInp(p + '.contacto')}</td><td>${bInp(p + '.telefono', 'text', 'style="width:120px"')}</td><td>${bInp(p + '.email', 'text', 'placeholder="recepcion@cliente.com" style="min-width:190px"')}</td>
           <td><button class="btn sm icon ghost" data-act="sedeDel" data-i="${i}" aria-label="Eliminar sede">${ico('trash')}</button></td></tr>`; }).join('')}</tbody></table></div>`
         : `<div class="empty" style="padding:28px"><h3>Sin sedes${f ? ' para ' + esc(f) : ''}</h3><p>Añade las clínicas u oficinas a las que enviáis material.</p></div>`}</section>
-      <section class="panel" style="margin-top:18px"><div class="panel-h"><h3>Salidas</h3></div><div class="panel-b"><div class="fgrid">
+      <!--/sedes--><section class="panel" style="margin-top:18px"><div class="panel-h"><h3>Salidas</h3></div><div class="panel-b"><div class="fgrid">
         <label class="f">Generar albarán<span style="height:32px;display:flex;align-items:center">${bChk('albaran.generateDefault', 'Marcado por defecto en las salidas')}</span></label>
         <label class="f">Sede por defecto<select class="sel sm" data-bind="albaran.defaultSedeId" id="b-albaran_defaultSedeId"><option value="">— Ninguna —</option>${(d.sedes || []).filter(x => x.nombre).map(x => `<option value="${esc(x.id)}" ${A.defaultSedeId === x.id ? 'selected' : ''}>${esc([x.cliente, sedeLabel(x)].filter(Boolean).join(' · '))}</option>`).join('')}</select><span class="help">Aparece ya elegida al hacer una salida.</span></label></div></div></section>
       <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Columnas combinadas</h3><span class="help">Juntan varios campos en una sola columna del albarán, la lista de recogida o el correo. Escribe los campos entre llaves.</span></div><button class="btn sm primary" data-act="comboAdd">${ico('plus')}Añadir columna</button></div><div class="panel-b">
@@ -2100,6 +2104,7 @@ VIEWS.ajustes = () => {
           <span class="help">Puedes usar: {albaran}, {cliente}, {sede}, {fecha}, {unidades}, {transportista}, {referencia}, {pedido}, {usuario}, {empresa}. Debajo del mensaje se añade la lista de material y el PDF va adjunto.</span></label>
       </div></div></section>`;
   }
+  if (S.stab === 'clientes' && !fullSettings()) { const a = body.indexOf('<!--sedes-->'), b = body.indexOf('<!--/sedes-->'); body = a >= 0 && b > a ? body.slice(a + 12, b).replace('style="margin-top:18px"', '') : ''; }
   if (S.stab === 'correos') {
     const T = [
       ['invite', 'Invitación a un usuario nuevo', 'Tu acceso al almacén de {empresa}', 'Hola {nombre},\n\nSe ha creado tu cuenta en el control de almacén de {empresa}. Tu usuario es {usuario}.\n\nElige tu contraseña con el botón de abajo. El enlace caduca en {horas} horas y solo se puede usar una vez.', '{nombre}, {usuario}, {empresa}, {horas}'],
@@ -2176,11 +2181,11 @@ VIEWS.ajustes = () => {
     const owner = c => d.almacenes.find(a => (a.clientes || []).includes(c));
     const nItems = Object.values(Store.items).filter(it => almOfItem(it) === A.id).length;
     body = `<div class="split-pane"><section class="panel"><div class="list-nav">${d.almacenes.map(a => `<button class="${a.id === S.almSel ? 'on' : ''}" data-act="almSel" data-k="${esc(a.id)}"><span>${esc(a.nombre)}</span><span class="c">${(a.clientes || []).filter(c => (d.lists.clientes || []).includes(c)).length} cli.</span></button>`).join('')}</div>
-      <div class="panel-b" style="border-top:1px solid var(--line)"><label class="f">Nuevo almacén<span class="selwrap"><input class="inp sm" id="new-alm" placeholder="Ej. Almacén Lisboa"><button class="btn sm" data-act="almAdd">${ico('plus')}</button></span></label></div></section>
-      <div><section class="panel"><div class="panel-h"><h3>${esc(A.nombre)}</h3>${d.almacenes.length > 1 ? `<button class="btn sm danger" data-act="almDel" ${(A.clientes || []).length ? 'disabled title="Quita antes sus clientes"' : ''}>${ico('trash')}Eliminar almacén</button>` : ''}</div><div class="panel-b">
+      ${!fullSettings() ? '' : `<div class="panel-b" style="border-top:1px solid var(--line)"><label class="f">Nuevo almacén<span class="selwrap"><input class="inp sm" id="new-alm" placeholder="Ej. Almacén Lisboa"><button class="btn sm" data-act="almAdd">${ico('plus')}</button></span></label></div>`}</section>
+      <div><section class="panel"><div class="panel-h"><h3>${esc(A.nombre)}</h3>${d.almacenes.length > 1 && fullSettings() ? `<button class="btn sm danger" data-act="almDel" ${(A.clientes || []).length ? 'disabled title="Quita antes sus clientes"' : ''}>${ico('trash')}Eliminar almacén</button>` : ''}</div><div class="panel-b">
         <label class="f" style="max-width:340px">Nombre ${bInp(`almacenes.${ai}.nombre`)}</label>
         <h3 style="margin:18px 0 8px">Clientes de este almacén</h3><p class="help" style="margin:0 0 8px">Un cliente puede estar en varios almacenes; cada equipo indica en cuál está. Los clientes se crean en «Listas y marcas».</p>
-        <div class="alm-clients">${listOf('clientes').map(c => { const also = d.almacenes.filter(a => a.id !== A.id && (a.clientes || []).includes(c)).map(a => a.nombre); return `<label class="chk"><input type="checkbox" data-act="almCli" data-c="${esc(c)}" ${(A.clientes || []).includes(c) ? 'checked' : ''}>${esc(c)}${also.length ? ` <span class="help">(también en ${esc(also.join(', '))})</span>` : ''}</label>`; }).join('') || '<span class="help">No hay clientes en la lista.</span>'}</div>
+        ${!fullSettings() ? `<p style="margin:0">${(A.clientes || []).map(c => `<span class="badge">${esc(c)}</span>`).join(' ') || '<span class="muted">Sin clientes.</span>'}</p><p class="help">Los clientes de cada almacén los asigna el administrador.</p>` : `<div class="alm-clients">${listOf('clientes').map(c => { const also = d.almacenes.filter(a => a.id !== A.id && (a.clientes || []).includes(c)).map(a => a.nombre); return `<label class="chk"><input type="checkbox" data-act="almCli" data-c="${esc(c)}" ${(A.clientes || []).includes(c) ? 'checked' : ''}>${esc(c)}${also.length ? ` <span class="help">(también en ${esc(also.join(', '))})</span>` : ''}</label>`; }).join('') || '<span class="help">No hay clientes en la lista.</span>'}</div>`}
         ${nItems ? `<p class="help" style="margin-top:8px">${nItems} registros de material pertenecen a los clientes de este almacén.</p>` : ''}
       </div></section>
       <h3 style="margin:20px 0 10px">Distribución de ${esc(A.nombre)}</h3>
@@ -2210,12 +2215,12 @@ VIEWS.ajustes = () => {
         ${isShaped(L) ? `<div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Vértice</th><th>X</th><th>Z</th><th></th></tr></thead><tbody>${L.shape.map((q, k) => `<tr style="cursor:default"><td>${k + 1}</td>
           <td><input class="inp sm" type="number" step="0.5" style="width:80px" data-shape="${k}" data-axis="0" value="${esc(q[0])}"></td><td><input class="inp sm" type="number" step="0.5" style="width:80px" data-shape="${k}" data-axis="1" value="${esc(q[1])}"></td>
           <td><button class="btn sm icon ghost" data-act="shapeIns" data-i="${k}" title="Añadir un vértice después">${ico('plus')}</button>${L.shape.length > 3 ? `<button class="btn sm icon ghost" data-act="shapeDel" data-i="${k}" aria-label="Quitar vértice">${ico('trash')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>
-      <section class="panel"><div class="panel-h"><div><h3>Tipos de elementos</h3><span class="help">Nombre, color y medidas por defecto de cada tipo. Alto 0 = marca en el suelo (como un pasillo). Sirven para todos los almacenes.</span></div><button class="btn sm" data-act="otAdd">${ico('plus')}Tipo propio</button></div>
+      ${!fullSettings() ? '' : `<section class="panel"><div class="panel-h"><div><h3>Tipos de elementos</h3><span class="help">Nombre, color y medidas por defecto de cada tipo. Alto 0 = marca en el suelo (como un pasillo). Sirven para todos los almacenes.</span></div><button class="btn sm" data-act="otAdd">${ico('plus')}Tipo propio</button></div>
         <div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Nombre</th><th>Color</th><th>Ancho</th><th>Fondo</th><th>Alto</th><th></th></tr></thead><tbody>
         ${Object.entries(objTypes(d)).map(([k, t]) => `<tr style="cursor:default"><td><input class="inp sm" style="width:170px" data-ot="${esc(k)}" data-f="l" value="${esc(t.l)}"></td>
           <td><input type="color" class="inp sm" style="width:52px;padding:2px" data-ot="${esc(k)}" data-f="c" value="${esc(t.c)}"></td>
           ${['w', 'd', 'h'].map(f => `<td><input class="inp sm" type="number" min="0" step="0.1" style="width:66px" data-ot="${esc(k)}" data-f="${f}" value="${esc(t[f])}"></td>`).join('')}
-          <td>${t.custom ? `<button class="btn sm icon ghost" data-act="otDel" data-k="${esc(k)}" aria-label="Eliminar tipo">${ico('trash')}</button>` : (d.objTypes || []).some(x => x.key === k) ? `<button class="btn sm icon ghost" data-act="otReset" data-k="${esc(k)}" title="Volver a los valores de fábrica">${ico('reset')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
+          <td>${t.custom ? `<button class="btn sm icon ghost" data-act="otDel" data-k="${esc(k)}" aria-label="Eliminar tipo">${ico('trash')}</button>` : (d.objTypes || []).some(x => x.key === k) ? `<button class="btn sm icon ghost" data-act="otReset" data-k="${esc(k)}" title="Volver a los valores de fábrica">${ico('reset')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>`}
       <section class="panel"><div class="panel-h"><div><h3>Elementos del plano</h3><span class="help">Pasillos, pilares, tabiques, oficinas, mesas, puestos de embalaje, extintores y salidas de emergencia.</span></div>
         <div class="row"><select class="sel sm" id="obj-type" style="width:auto">${Object.entries(objTypes(d)).map(([k, t]) => `<option value="${k}">${esc(t.l)}</option>`).join('')}</select><button class="btn sm primary" data-act="objAdd">${ico('plus')}Añadir</button></div></div>
         ${(L.objects || []).length ? `<div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Tipo</th><th>Nombre</th><th>X</th><th>Z</th><th>Ancho</th><th>Fondo</th><th>Giro</th><th></th></tr></thead><tbody>
@@ -2244,8 +2249,8 @@ VIEWS.ajustes = () => {
     <section class="panel"><div class="panel-h"><h3>Restaurar copia</h3></div><div class="panel-b"><p style="margin-top:0">Sustituye los ajustes y añade o actualiza el material de la copia. El material que no esté en la copia se conserva.</p><input type="file" id="restore-file" accept=".json,application/json"></div></section>
     <section class="panel"><div class="panel-h"><h3>Datos de ejemplo</h3></div><div class="panel-b"><p style="margin-top:0">Crea unos 70 registros repartidos por estanterías para probar filtros, exportaciones y el mapa.</p><button class="btn" data-act="sampleData">Cargar datos de ejemplo</button></div></section>
     <section class="panel"><div class="panel-h"><h3>Vaciar inventario</h3></div><div class="panel-b"><p style="margin-top:0">Elimina todo el material registrado. Los usuarios y ajustes se mantienen. Haz antes una copia.</p><button class="btn danger" data-act="wipe">${ico('trash')}Vaciar inventario</button></div></section></div>`;
-  return `<div class="page-head"><div><h1>Ajustes</h1><p>Todo lo que se puede adaptar: listas, campos, almacén y permisos.</p></div></div>
-    <nav class="stabs">${STABS.map(([k, l]) => `<a href="#/ajustes/${k}" class="${S.stab === k ? 'on' : ''}">${l}</a>`).join('')}</nav>
+  return `<div class="page-head"><div><h1>Ajustes</h1><p>${fullSettings() ? 'Todo lo que se puede adaptar: listas, campos, almacén y permisos.' : 'La configuración de tus almacenes y las sedes de tus clientes.'}</p></div></div>
+    <nav class="stabs">${TABS.map(([k, l]) => `<a href="#/ajustes/${k}" class="${S.stab === k ? 'on' : ''}">${l}</a>`).join('')}</nav>
     ${body}
     <div class="savebar ${dirty() ? '' : 'hide'}" id="savebar"><span>Tienes cambios sin guardar.</span><span class="spacer"></span><button class="btn ghost" data-act="sDiscard">Descartar</button><button class="btn primary" data-act="sSave">Guardar cambios</button></div>`;
 };
@@ -2260,7 +2265,23 @@ function drawLayoutPreview() {
     return `<g><line x1="${X(ax)}" y1="${Z(az)}" x2="${X(bx)}" y2="${Z(bz)}" stroke="var(--paper)" stroke-width="7"/><line x1="${X(ax)}" y1="${Z(az)}" x2="${X(bx)}" y2="${Z(bz)}" stroke="var(--red)" stroke-width="4" stroke-dasharray="6 3"/>
       <text x="${lx}" y="${lz}" text-anchor="${Math.abs(g.n[0]) < 0.5 ? 'middle' : g.n[0] > 0 ? 'start' : 'end'}" font-size="11" font-weight="700" fill="var(--red-ink)">${esc(g.d.name || 'Entrada')}</text></g>`; }).join('')}</svg></div>`;
 }
+async function saveScopedSettings() {
+  const d = draft(), cur = Store.settings; let n = 0;
+  for (const a of d.almacenes) {
+    const o = (cur.almacenes || []).find(x => x.id === a.id);
+    if (o && JSON.stringify({n: a.nombre, l: a.layout}) === JSON.stringify({n: o.nombre, l: o.layout})) continue;
+    a.layout.racks.forEach(r => { ['x', 'z', 'rot', 'len', 'levels', 'elev', 'huecos'].forEach(k => r[k] = Number(r[k]) || 0); r.len = Math.max(1, r.len); r.levels = Math.min(10, Math.max(1, r.levels)); });
+    a.layout.zones.forEach(z => { ['x', 'z', 'w', 'd'].forEach(k => z[k] = Number(z[k]) || 0); z.w = Math.max(1, z.w); z.d = Math.max(1, z.d); });
+    await API('PUT', '/api/almacenes/' + encodeURIComponent(a.id), {nombre: a.nombre, layout: a.layout}); n++;
+  }
+  if (JSON.stringify(d.sedes || []) !== JSON.stringify(cur.sedes || [])) { await API('PUT', '/api/sedes', {sedes: (d.sedes || []).filter(x => x.nombre || x.direccion)}); n++; }
+  return n;
+}
 async function saveSettings() {
+  if (!fullSettings()) {
+    try { await saveScopedSettings(); S.sdraft = null; toast('Cambios guardados.'); renderMain(); } catch (ex) { toast(ex.message, 'err', 7000); }
+    return;
+  }
   const d = draft();
   for (const c of d.categories) {
     if (!c.name.trim()) { toast('Todas las categorías necesitan nombre.', 'warn'); return; }

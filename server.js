@@ -726,10 +726,9 @@ function sanitizeSettings(s) {
   out.roles.admin = { name: (out.roles.admin && out.roles.admin.name) || 'Administrador', perms: '*', locked: true };
   return out;
 }
-api.get('/settings', requireAuth, (req, res) => {
-  const st = storedSettings(), u = req.auth.u;
-  if (!st || isTotal(u)) return res.json(st);
-  // Usuario con acceso limitado: solo ve sus almacenes, sus clientes y las sedes de esos clientes.
+// Ajustes que puede ver cada usuario: con acceso limitado, solo sus almacenes, sus clientes y las sedes de esos clientes.
+function settingsFor(u, st) {
+  if (!st || isTotal(u)) return st;
   const out = JSON.parse(JSON.stringify(st)), sc = scopeOf(u);
   out.almacenes = almacenesOf(st).filter(a => Array.isArray(sc.almacenes[a.id])).map(a => ({ ...a, clientes: (a.clientes || []).filter(c => sc.almacenes[a.id].includes(c)) }));
   const visible = new Set(out.almacenes.flatMap(a => a.clientes));
@@ -737,7 +736,40 @@ api.get('/settings', requireAuth, (req, res) => {
   out.sedes = (out.sedes || []).filter(x => visible.has(x.cliente));
   delete out.stockAlertEmails; (out.stockRules || []).forEach(r => { delete r.emails; });
   if (out.albaran) delete out.albaran.emailTo;
-  res.json(out);
+  delete out.correos;
+  return out;
+}
+api.get('/settings', requireAuth, (req, res) => res.json(settingsFor(req.auth.u, storedSettings())));
+/* --- Responsable de almacén: configura solo sus almacenes y las sedes de sus clientes --- */
+function saveScoped(next, u, what) {
+  const s = sanitizeSettings(next);
+  if (JSON.stringify(s).length > 25_000_000) throw httpErr(400, 'Los ajustes son demasiado grandes. Usa planos de fondo más ligeros.');
+  saveSettings(s);
+  broadcast('settings', x => settingsFor(x, s));
+  audit(u.username, 'ajustes', what);
+  alerts.schedule();
+  return s;
+}
+api.put('/almacenes/:id', requireAuth, requirePerm('alm.manage'), (req, res) => {
+  const u = req.auth.u, id = String(req.params.id), b = req.body || {};
+  if (!isTotal(u) && !Array.isArray(scopeOf(u).almacenes[id])) throw httpErr(403, 'No tienes acceso a ese almacén.');
+  const st = JSON.parse(JSON.stringify(storedSettings() || settings()));
+  st.almacenes = almacenesOf(st);
+  const a = st.almacenes.find(x => x.id === id); if (!a) throw httpErr(404, 'El almacén no existe.');
+  if (!isObj(b.layout)) throw httpErr(400, 'Distribución no válida.');
+  a.nombre = String(b.nombre || '').trim().slice(0, 80) || a.nombre; a.layout = b.layout;   // los clientes del almacén no se cambian aquí
+  const s = saveScoped(st, u, `Almacén «${a.nombre}» configurado`);
+  res.json(settingsFor(u, s));
+});
+api.put('/sedes', requireAuth, requirePerm('alm.manage'), (req, res) => {
+  const u = req.auth.u, b = req.body || {};
+  if (!Array.isArray(b.sedes)) throw httpErr(400, 'Sedes no válidas.');
+  const st = JSON.parse(JSON.stringify(storedSettings() || settings()));
+  const mine = new Set(isTotal(u) ? ((st.lists || {}).clientes || []) : Object.values(scopeOf(u).almacenes).flat());
+  const bad = b.sedes.find(x => !isObj(x) || !mine.has(x.cliente)); if (bad) throw httpErr(403, `No tienes acceso al cliente ${(bad && bad.cliente) || '(sin cliente)'}.`);
+  st.sedes = (st.sedes || []).filter(x => !mine.has(x.cliente)).concat(b.sedes);
+  const s = saveScoped(st, u, 'Sedes de clientes actualizadas');
+  res.json(settingsFor(u, s));
 });
 api.put('/settings', requireAuth, requirePerm('settings.manage'), requireTotal, (req, res) => {
   const b = req.body;
@@ -752,7 +784,7 @@ api.put('/settings', requireAuth, requirePerm('settings.manage'), requireTotal, 
   const renamed = applyRenames(settings(), s, req.auth.u.username);
   saveSettings(s);
   mail.setAccent(s.tema && s.tema.primario);
-  broadcast('settings', s);
+  broadcast('settings', u => settingsFor(u, s));
   if (renamed.items.length) emitItems(renamed.items);
   if (renamed.clientes) { broadcast('orders', {}); broadcast('deliveries', {}); broadcast('users', {}); }
   alerts.schedule();
