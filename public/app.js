@@ -46,6 +46,7 @@ const ICONS = {
   cog:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   send:'<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/>',
   columns:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+  shield:'<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
   camera:'<path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/>',
   truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
   clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
@@ -114,7 +115,7 @@ function defaultSettings() {
     company: 'Laberit',
     brand: {mode:'text', bg:'red', subtitle:'Control de almacén', logo:''},
     mfaRequired: 'off', mfaRememberDays: 30,
-    estadosSistema: {stock:['En stock'], reservado:'Reservado', enviado:'Enviado', baja:['Baja']},
+    estadosSistema: {stock:['En stock'], reservado:'Reservado', enviado:'Enviado', baja:['Baja'], transito:'En tránsito', retirado:'Retirado'},
     sedes: [],
     albaran: {razonSocial:'', cif:'', direccion:'', telefono:'', email:'', pie:'', declaracion:'', columns:['n', 'cat', 'desc', 'serie', 'qty'],
       showEmisor:true, showInfo:true, showNotes:true, showSignatures:true, showDeclaration:true, defaultSedeId:'', generateDefault:true, mailDefault:false,
@@ -134,7 +135,7 @@ function defaultSettings() {
       paises: ['España', 'Portugal'],
       clientes: ['IVCEvidensia'],
       condiciones: ['Nuevo', 'Refurbished'],
-      estados: ['En stock', 'Reservado', 'En preparación', 'Enviado', 'Instalado', 'RMA', 'Baja'],
+      estados: ['En stock', 'Reservado', 'En preparación', 'En tránsito', 'Enviado', 'Instalado', 'RMA', 'Retirado', 'Baja'],
       tipos_equipo: ['Sobremesa', 'Sobremesa táctil', 'Portátil', 'Mini PC', 'Workstation', 'All-in-One'],
       marcas_equipo: ['Lenovo', 'HP', 'Dell', 'Fujitsu', 'Apple'],
       sistemas: ['Windows 11 Pro', 'Windows 10 Pro', 'Linux', 'Sin sistema'],
@@ -248,7 +249,7 @@ function mergeSettings(s) {
   out.brand = Object.assign({}, d.brand, (s && s.brand) || {});
   out.sedes = (s && Array.isArray(s.sedes)) ? clone(s.sedes) : [];
   out.albaran = Object.assign({}, d.albaran, (s && s.albaran) || {});
-  out.numeracion = Object.assign({albaran:'ALB', pedido:'PED', anual:true, digitos:4}, (s && s.numeracion) || {});
+  out.numeracion = Object.assign({albaran:'ALB', pedido:'PED', traspaso:'TRA', retirada:'RET', certificado:'CERT', anual:true, digitos:4}, (s && s.numeracion) || {});
   out.recogida = Object.assign({titulo:'', columns:['check', 'balda', 'cat', 'desc', 'serie', 'qty'], showSummary:true, showSignature:true, groupByLocation:true}, (s && s.recogida) || {});
   out.tema = Object.assign({primario:'#C8102E'}, (s && s.tema) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
@@ -399,7 +400,7 @@ function locCode(d) {
   return [r.name, d.nivel || 1, Number(d.hueco) > 0 ? d.hueco : null].filter(x => x !== null).join('-');
 }
 const parseLocQR = t => { const m = /^LOC\|([^|]+)\|(\d+)\|(\d+)$/.exec(String(t || '').trim()); return m ? {ubicacion: m[1], nivel: Number(m[2]), hueco: Number(m[3])} : null; };
-const EST = () => { const e = (Store.settings && Store.settings.estadosSistema) || {}; return {stock: e.stock && e.stock.length ? e.stock : ['En stock'], reservado: e.reservado || 'Reservado', enviado: e.enviado || 'Enviado', baja: e.baja || ['Baja']}; };
+const EST = () => { const e = (Store.settings && Store.settings.estadosSistema) || {}; return {stock: e.stock && e.stock.length ? e.stock : ['En stock'], reservado: e.reservado || 'Reservado', enviado: e.enviado || 'Enviado', baja: e.baja || ['Baja'], transito: e.transito || 'En tránsito', retirado: e.retirado || 'Retirado'}; };
 const isStock = e => EST().stock.includes(e);
 const almacenes = () => (Store.settings && Store.settings.almacenes) || [];
 const almById = id => almacenes().find(a => a.id === id);
@@ -407,12 +408,16 @@ const almOfClient = c => { const a = almacenes().find(x => (x.clientes || []).in
 function curAlm() { const v = S.alm !== undefined ? S.alm : LS.get('lbinv.alm', ''); return almById(v) ? v : ''; }
 const mapAlm = () => curAlm() || (almacenes()[0] || {}).id;
 const curLayout = () => (almById(mapAlm()) || {}).layout || {width: 30, depth: 20, racks: [], zones: []};
-const inAlm = it => !curAlm() || almOfClient(it.data.cliente) === curAlm();
+const almOfItem = it => { const a = it && it.data && it.data.almacen; return a && almById(a) ? a : almOfClient(it && it.data && it.data.cliente); };
+const almsOfClient = c => almacenes().filter(a => (a.clientes || []).includes(c));
+const inAlm = it => !curAlm() || almOfItem(it) === curAlm();
 function refreshLoc(prefix, root = document) {
   const c = root.querySelector('#' + prefix + '-cliente'), u = root.querySelector('#' + prefix + '-ubicacion');
   if (!c || !u || u.tagName !== 'SELECT' || c.value === '__keep') return;
+  const as = root.querySelector('#' + prefix + '-almacen');
+  if (as) { const cur0 = as.value, opts = almsOfClient(c.value).length ? almsOfClient(c.value) : almacenes(); as.innerHTML = opts.map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join(''); as.value = opts.some(a => a.id === cur0) ? cur0 : (opts.some(a => a.id === curAlm()) ? curAlm() : opts[0].id); }
   const cur = u.value, first = u.options[0] ? u.options[0].outerHTML : '<option value="">—</option>';
-  const locs = allLocations(almOfClient(c.value) || undefined);
+  const locs = allLocations((as && as.value) || almOfClient(c.value) || undefined);
   u.innerHTML = first + locs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
   if ([...u.options].some(o => o.value === cur)) u.value = cur;
 }
@@ -770,7 +775,7 @@ function barsHTML(map, total, max = 7) {
 function ruleCount(r) {
   const c = catById(r.cat); if (!c) return 0;
   const alm = r.almacen || curAlm();
-  return Object.values(Store.items).filter(it => it.cat === r.cat && isStock(it.data.estado) && !it.data.pedido && (!alm || almOfClient(it.data.cliente) === alm) && (r.conds || []).every(k => !k.v || norm(it.data[k.k]) === norm(k.v))).reduce((a, it) => a + qtyOf(it), 0);
+  return Object.values(Store.items).filter(it => it.cat === r.cat && isStock(it.data.estado) && !it.data.pedido && (!alm || almOfItem(it) === alm) && (r.conds || []).every(k => !k.v || norm(it.data[k.k]) === norm(k.v))).reduce((a, it) => a + qtyOf(it), 0);
 }
 function alertsList() {
   const out = []; const items = Object.values(Store.items); const warn = Store.settings.expiryWarnDays;
@@ -990,7 +995,7 @@ VIEWS.inicio = () => {
   const alertsBox = `<section class="panel"><div class="panel-h"><h3>Avisos</h3><span class="badge ${al.length ? 'red' : 'ok'}">${al.length || 'Todo en orden'}</span></div><div class="panel-b dash-list">
     ${al.length ? al.slice(0, 6).map(a => `<div class="dash-alert ${a.sev > 1 ? 'hi' : ''}" ${a.id ? `data-act="openItem" data-id="${a.id}"` : ''}>${ico(a.kind === 'stock' ? 'alert' : 'clock')}<span>${esc(a.text)}</span></div>`).join('') + (al.length > 6 ? `<p class="help" style="margin:6px 0 0">Y ${al.length - 6} más.</p>` : '') : '<p class="muted" style="margin:0">Sin stock bajo ni garantías o licencias a punto de vencer.</p>'}</div></section>`;
   const almBox = almacenes().length > 1 && !curAlm() ? `<section class="panel"><div class="panel-h"><h3>Por almacén</h3></div><div class="panel-b dash-list">
-    ${almacenes().map(a => { const its = items.filter(i => almOfClient(i.data.cliente) === a.id); return `<button class="dash-row" data-act="dashAlm" data-id="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><span class="help" style="display:block">${plural((a.clientes || []).length, 'cliente')}</span></span><span class="num" style="text-align:right"><b>${sum(its).toLocaleString('es-ES')}</b><span class="help" style="display:block">${sum(its.filter(i => isStock(i.data.estado)))} disponibles</span></span></button>`; }).join('')}</div></section>` : '';
+    ${almacenes().map(a => { const its = items.filter(i => almOfItem(i) === a.id); return `<button class="dash-row" data-act="dashAlm" data-id="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><span class="help" style="display:block">${plural((a.clientes || []).length, 'cliente')}</span></span><span class="num" style="text-align:right"><b>${sum(its).toLocaleString('es-ES')}</b><span class="help" style="display:block">${sum(its.filter(i => isStock(i.data.estado)))} disponibles</span></span></button>`; }).join('')}</div></section>` : '';
   const feed = Store.auditList().filter(e => !['login', 'logout', 'login_fallido', 'mfa_fallido'].includes(e.a)).slice(0, 8);
   const feedBox = `<section class="panel"><div class="panel-h"><h3>Actividad reciente</h3>${Auth.can('audit.view') ? '<a class="btn sm ghost" href="#/registro">Ver todo</a>' : ''}</div><div class="panel-b">
     ${feed.length ? `<ol class="dash-feed">${feed.map(e => `<li><span class="dash-feed-dot"></span><div><span>${esc(e.d)}</span><span class="help">${esc(ACTION_LABEL[e.a] || e.a)}, ${esc(e.u)}, ${relTime(e.t)}</span></div></li>`).join('')}</ol>` : '<p class="muted" style="margin:0">Sin actividad todavía.</p>'}</div></section>`;
@@ -1127,6 +1132,7 @@ function tableAreaHTML() {
   const canBulk = Auth.can('inv.edit') || Auth.can('inv.delete') || Auth.can('inv.export');
   const bulk = S.sel.size ? `<div class="bulk"><span>${plural(S.sel.size, 'seleccionado')}</span><span class="spacer"></span>
     ${Auth.can('inv.edit') ? `<button class="btn sm" data-act="bulkEdit">${ico('edit')}Cambiar estado, cliente o ubicación</button>` : ''}
+    ${Auth.can('inv.edit') ? `<button class="btn sm" data-act="eraseOpen">${ico('shield')}Registrar borrado</button><button class="btn sm" data-act="certMake">${ico('file')}Certificado de borrado</button>` : ''}
     ${Auth.can('inv.export') ? `<button class="btn sm" data-act="labels" data-scope="sel">${ico('qr')}Etiquetas</button><button class="btn sm" data-act="exportCSV" data-scope="sel">${ico('down')}CSV</button>` : ''}
     ${Auth.can('inv.delete') ? `<button class="btn sm danger" data-act="bulkDelete">${ico('trash')}Eliminar</button>` : ''}
     <button class="btn sm ghost" data-act="clearSel">Quitar selección</button></div>` : '';
@@ -1181,7 +1187,7 @@ function openItemForm(catId, itemId, preset) {
   const it = itemId ? Store.items[itemId] : null;
   const data = it ? clone(it.data) : Object.assign(defaultsFor(c), preset || {});
   const anyHuecos = almacenes().some(a => (a.layout.racks || []).some(r => Number(r.huecos) > 0));
-  const body = `<form id="item-form" class="fgrid" novalidate>${c.fields.map(f => fieldInput(f, data[f.key]) + (f.key === 'nivel' && anyHuecos ? `<label class="f"><span>Hueco</span><input class="inp" id="fld-hueco" type="number" min="0" max="50" value="${esc(data.hueco || '')}" placeholder="Sin hueco"></label>` : '')).join('')}</form><div id="if-err" class="err-msg hide" style="margin-top:14px"></div>`;
+  const body = `<form id="item-form" class="fgrid" novalidate>${c.fields.map(f => (f.key === 'ubicacion' ? (almacenes().length > 1 ? `<label class="f"><span>Almacén</span><select class="sel" id="fld-almacen">${almacenes().map(a => `<option value="${esc(a.id)}" ${(data.almacen || (almsOfClient(data.cliente).some(a => a.id === curAlm()) ? curAlm() : almOfClient(data.cliente))) === a.id ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>` : '') : '') + fieldInput(f, data[f.key]) + (f.key === 'nivel' && anyHuecos ? `<label class="f"><span>Hueco</span><input class="inp" id="fld-hueco" type="number" min="0" max="50" value="${esc(data.hueco || '')}" placeholder="Sin hueco"></label>` : '')).join('')}</form><div id="if-err" class="err-msg hide" style="margin-top:14px"></div>`;
   const foot = `<button class="btn" data-close>Cancelar</button>${!it ? `<button class="btn" data-save="again">Guardar y añadir otro</button>` : ''}<button class="btn primary" data-save="close">${it ? 'Guardar cambios' : 'Dar de alta'}</button>`;
   const L = openLayer(modalHTML(`${it ? 'Editar' : 'Alta de'} ${c.name.toLowerCase()}${it && it.data.serie ? ' · ' + it.data.serie : ''}`, body, foot));
   refreshLoc('fld', L.el);
@@ -1191,6 +1197,7 @@ function openItemForm(catId, itemId, preset) {
     const err = $('#if-err', L.el); err.classList.add('hide');
     const nd = {}; const missing = [];
     { const hu = $('#fld-hueco', L.el); if (hu) nd.hueco = Number(hu.value) || ''; else if (data.hueco) nd.hueco = data.hueco; }
+    { const as = $('#fld-almacen', L.el); nd.almacen = as ? as.value : (data.almacen || almOfClient(readField(c.fields.find(f => f.key === 'cliente') || {key: 'cliente'}, 'fld', L.el)) || (almacenes()[0] || {}).id); }
     c.fields.forEach(f => { const v = readField(f, 'fld', L.el); nd[f.key] = v; if (f.required && (v === '' || v === undefined || v === null)) missing.push(f.label); });
     if (missing.length) { err.textContent = 'Completa: ' + missing.join(', ') + '.'; err.classList.remove('hide'); return; }
     for (const f of c.fields.filter(f => f.unique && nd[f.key])) {
@@ -1239,7 +1246,8 @@ function renderDrawer() {
       ${Auth.can('inv.delete') ? `<button class="btn sm danger" data-act="delItem" data-id="${it.id}">${ico('trash')}Eliminar</button>` : ''}</div></div>
     <div class="d-body">
       <div class="qr-box"><div class="qr" id="drawer-qr"></div><div><b class="serial">${esc(it.data.serie || it.id)}</b><div class="help">Escanea el código para identificar este material en el almacén.</div></div></div>
-      <dl class="kv">${it.data.ubicacion && rackById(it.data.ubicacion) ? `<dt>Ubicación exacta</dt><dd><b class="serial loc-code">${esc(locCode(it.data))}</b></dd>` : ''}${kv}${it.data.pedido ? `<dt>Pedido</dt><dd><span class="serial">${esc(it.data.pedido)}</span></dd>` : ''}${it.data.destino ? `<dt>Destino</dt><dd>${esc(it.data.destino)}</dd>` : ''}${it.data.albaran_salida ? `<dt>Albarán de salida</dt><dd><span class="serial">${esc(it.data.albaran_salida)}</span></dd>` : ''}</dl>
+      ${it.data.borrado ? `<div class="erase-box">${ico('shield')}<div><b>Borrado de datos: ${esc(it.data.borrado.resultado)}</b><span class="help">${esc(it.data.borrado.metodo)}${it.data.borrado.herramienta ? ', ' + esc(it.data.borrado.herramienta) : ''}. ${fmtDate(it.data.borrado.fecha)}, ${esc(it.data.borrado.tecnico)}.${it.data.certificado_borrado ? ' Certificado ' + esc(it.data.certificado_borrado) + '.' : ''}</span></div></div>` : ''}
+      <dl class="kv">${almacenes().length > 1 ? `<dt>Almacén</dt><dd>${esc((almById(almOfItem(it)) || {}).nombre || '—')}${it.data.traspaso ? ` <span class="badge warn">En tránsito (${esc(it.data.traspaso)})</span>` : ''}</dd>` : ''}${it.data.ubicacion && rackById(it.data.ubicacion) ? `<dt>Ubicación exacta</dt><dd><b class="serial loc-code">${esc(locCode(it.data))}</b></dd>` : ''}${kv}${it.data.pedido ? `<dt>Pedido</dt><dd><span class="serial">${esc(it.data.pedido)}</span></dd>` : ''}${it.data.destino ? `<dt>Destino</dt><dd>${esc(it.data.destino)}</dd>` : ''}${it.data.albaran_salida ? `<dt>Albarán de salida</dt><dd><span class="serial">${esc(it.data.albaran_salida)}</span></dd>` : ''}</dl>
       ${it.data.notas ? `<h3 style="margin-bottom:6px">Notas</h3><p style="white-space:pre-wrap;margin:0 0 20px">${esc(it.data.notas)}</p>` : ''}
       <h3 style="margin-bottom:12px">Historial</h3>
       <div class="timeline">${(it.history || []).slice().reverse().map(h => `<div><b>${esc(h.a)}</b>${h.d ? ` <span>${esc(h.d)}</span>` : ''}<div class="when">${esc(h.u)}, ${fmtDT(h.t)}</div></div>`).join('') || '<p class="muted">Sin historial.</p>'}</div>
@@ -1425,7 +1433,7 @@ VIEWS.movimientos = () => {
         ${c.serialized ? `<label class="f"><span class="row" style="justify-content:space-between">Números de serie <span class="row" style="gap:6px"><button type="button" class="btn sm" data-act="readAlbaran" title="Lee los números de serie de una foto o PDF del albarán">${ico('file')}Leer albarán</button>${scanBtn('mv-serials', true, 'Entrada de material')}</span></span><textarea class="ta serial" id="mv-serials" rows="7" placeholder="Escanea o pega un número de serie por línea"></textarea><span class="help" id="mv-count">0 números de serie</span></label>`
         : `<label class="f">Cantidad recibida<input class="inp" id="mv-qty" type="number" min="1" value="1"></label>`}
         <h3 style="margin:18px 0 10px">Datos comunes a toda la entrada</h3>
-        <div class="fgrid">${commonF.map(f => fieldInput(f, defaultsFor(c)[f.key], 'mvin')).join('')}</div>
+        <div class="fgrid">${commonF.map(f => (f.key === 'ubicacion' ? (almacenes().length > 1 ? `<label class="f"><span>Almacén</span><select class="sel" id="mvin-almacen">${almacenes().map(a => `<option value="${esc(a.id)}" ${(curAlm() || almOfClient(defaultsFor(c).cliente)) === a.id ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>` : '') : '') + fieldInput(f, defaultsFor(c)[f.key], 'mvin')).join('')}</div>
         <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn primary" data-act="mvIn">${ico('down')}Registrar entrada</button></div>
       </div></section>
     <section class="panel"><div class="panel-h"><h3>Salida o cambio por escaneo</h3></div>
@@ -1446,6 +1454,8 @@ VIEWS.movimientos = () => {
         <div class="row" style="margin-top:16px"><span class="spacer"></span><button class="btn primary" data-act="mvOut">${ico('up')}Aplicar cambios</button></div>
       </div></section>
   </div>
+  ${Auth.can('inv.move') && almacenes().length > 1 ? transferPanelHTML() : ''}
+  ${Auth.can('inv.create') ? retiradaPanelHTML() : ''}
   ${Auth.can('inv.edit') || Auth.can('inv.move') ? `<section class="panel place-panel" style="margin-top:18px"><div class="panel-h"><div><h3>Colocar en ubicación</h3><span class="help">Escanea la etiqueta de la balda o del hueco y después los equipos que dejas ahí. Cada uno queda ubicado al momento.</span></div></div>
     <div class="panel-b"><div class="place-grid">
       <div class="place-loc ${S.placeLoc ? 'on' : ''}"><span class="help">Ubicación actual</span><b class="serial">${S.placeLoc ? esc(locCode(S.placeLoc)) : 'Escanea una etiqueta de ubicación'}</b>${S.placeLoc ? `<span class="help">${esc(locName(S.placeLoc.ubicacion))}</span><button class="btn sm ghost" data-act="placeClear">Cambiar</button>` : ''}</div>
@@ -1486,6 +1496,7 @@ function mvOutUpdate() {
 async function doMvIn(btn) {
   const c = catById(S.mvCat); const commonF = c.fields.filter(f => !f.unique && f.key !== 'notas' && f.key !== 'cantidad');
   const base = defaultsFor(c); commonF.forEach(f => { const v = readField(f, 'mvin'); if (v !== undefined) base[f.key] = v; });
+  base.almacen = ($('#mvin-almacen') || {}).value || (almsOfClient(base.cliente).some(a => a.id === curAlm()) ? curAlm() : almOfClient(base.cliente)) || (almacenes()[0] || {}).id;
   const miss = commonF.filter(f => f.required && (base[f.key] === '' || base[f.key] === undefined)).map(f => f.label);
   if (miss.length) { toast('Completa: ' + miss.join(', '), 'warn'); return; }
   let recs;
@@ -1579,7 +1590,7 @@ VIEWS.mapa = () => `<div class="page-head"><div><h1>Mapa 3D del almacén</h1><p>
   ${Auth.can('settings.manage') ? `<a class="btn" href="#/ajustes/almacen">${ico('cog')}Editar distribución</a>` : ''}</div>
   <div class="map-wrap"><div class="map-stage" id="map-stage"><div class="map-tools"><button class="btn sm" data-act="mapTop">${ico('top')}Vista superior</button><button class="btn sm" data-act="mapReset">${ico('reset')}Restablecer</button></div><div class="map-tip hide" id="map-tip"></div><div class="map-hint">Arrastra para girar · Mayús o botón derecho para desplazar · Rueda para acercar</div></div>
   <aside class="map-side" id="map-side"></aside></div>`;
-const inMapAlm = i => almOfClient(i.data.cliente) === mapAlm() || (!i.data.cliente && mapAlm() === (almacenes()[0] || {}).id);
+const inMapAlm = i => almOfItem(i) === mapAlm() || (!i.data.cliente && !i.data.almacen && mapAlm() === (almacenes()[0] || {}).id);
 function mapVisibleItems() {
   const q = norm(S.mapQ.trim());
   return Object.values(Store.items).filter(i => (!S.mapCats || S.mapCats.has(i.cat)) && (!S.mapClient || i.data.cliente === S.mapClient) && !EST().baja.includes(i.data.estado) && i.data.estado !== EST().enviado && inMapAlm(i));
@@ -1605,7 +1616,7 @@ function renderMapSide() {
       <label class="f">Localizar número de serie<span class="selwrap"><input class="inp" id="map-q" placeholder="Escanea o escribe…" value="${esc(S.mapQ)}" autocomplete="off">${scanBtn('map-q', false, 'Localizar en el mapa')}</span></label>
       <div class="fchips">${cats().map(c => `<button class="fchip ${S.mapCats && !S.mapCats.has(c.id) ? 'off' : ''}" data-act="mapCat" data-id="${esc(c.id)}"><span class="cdot" style="--c:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}</div>
       ${almacenes().length > 1 ? `<select class="sel sm" id="map-alm" aria-label="Almacén">${almacenes().map(a => `<option value="${esc(a.id)}" ${mapAlm() === a.id ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select>` : ''}
-      <select class="sel sm" id="map-client" aria-label="Cliente"><option value="">Todos los clientes</option>${listOf('clientes').filter(c => almOfClient(c) === mapAlm()).map(c => `<option ${S.mapClient === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <select class="sel sm" id="map-client" aria-label="Cliente"><option value="">Todos los clientes</option>${listOf('clientes').filter(c => ((almById(mapAlm()) || {}).clientes || []).includes(c)).map(c => `<option ${S.mapClient === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
       <p class="help" style="margin:0">${plural(vis.reduce((a, i) => a + qtyOf(i), 0), 'unidad', 'unidades')} visibles. No se muestran las enviadas ni las dadas de baja.${unplaced.length ? ` <b style="color:var(--warn)">${unplaced.length} sin ubicación.</b>` : ''}</p>
     </div></section>${selHTML || '<section class="panel"><div class="empty" style="padding:28px 16px"><h3>Selecciona una estantería</h3><p>Verás el contenido de cada balda.</p></div></section>'}`;
 }
@@ -1948,6 +1959,8 @@ VIEWS.ajustes = () => {
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Estados con significado</h3><span class="help">Indica qué estados de tu lista usa la aplicación para el stock, los pedidos, los envíos y las bajas. Así puedes renombrarlos sin que deje de funcionar nada.</span></div></div><div class="panel-b"><div class="fgrid">
       <div class="f"><span>Cuentan como disponibles</span><div class="est-list">${(d.lists.estados || []).map(v => `<label class="chk"><input type="checkbox" data-estlist="stock" value="${esc(v)}" ${(d.estadosSistema.stock || []).includes(v) ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div><span class="help">Stock, avisos y reservas de pedidos.</span></div>
       <label class="f">Reservado para un pedido<select class="sel sm" data-bind="estadosSistema.reservado" id="b-estadosSistema_reservado">${(d.lists.estados || []).map(v => `<option ${d.estadosSistema.reservado === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+      <label class="f">En tránsito (traspasos entre almacenes)<select class="sel sm" data-bind="estadosSistema.transito" id="b-estadosSistema_transito">${(d.lists.estados || []).map(v => `<option ${EST2(d).transito === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
+      <label class="f">Retirado (equipos recogidos del cliente)<select class="sel sm" data-bind="estadosSistema.retirado" id="b-estadosSistema_retirado">${(d.lists.estados || []).map(v => `<option ${EST2(d).retirado === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
       <label class="f">Enviado (al generar albarán o enviar un pedido)<select class="sel sm" data-bind="estadosSistema.enviado" id="b-estadosSistema_enviado">${(d.lists.estados || []).map(v => `<option ${d.estadosSistema.enviado === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
       <div class="f"><span>De baja (no salen en el mapa ni en los avisos)</span><div class="est-list">${(d.lists.estados || []).map(v => `<label class="chk"><input type="checkbox" data-estlist="baja" value="${esc(v)}" ${(d.estadosSistema.baja || []).includes(v) ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div></div>
     </div></div></section>
@@ -2017,6 +2030,9 @@ VIEWS.ajustes = () => {
       <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Numeración</h3><span class="help">Se aplica a los albaranes y pedidos nuevos. Los ya creados conservan su número.</span></div></div><div class="panel-b"><div class="fgrid">
         <label class="f">Prefijo de albaranes ${bInp('numeracion.albaran', 'text', 'maxlength="10"')}</label>
         <label class="f">Prefijo de pedidos ${bInp('numeracion.pedido', 'text', 'maxlength="10"')}</label>
+        <label class="f">Prefijo de traspasos ${bInp('numeracion.traspaso', 'text', 'maxlength="10"')}</label>
+        <label class="f">Prefijo de retiradas ${bInp('numeracion.retirada', 'text', 'maxlength="10"')}</label>
+        <label class="f">Prefijo de certificados ${bInp('numeracion.certificado', 'text', 'maxlength="10"')}</label>
         <label class="f">Dígitos del número ${bInp('numeracion.digitos', 'number', 'min="3" max="8"')}</label>
         <label class="f">Año<span style="height:32px;display:flex;align-items:center">${bChk('numeracion.anual', 'Incluir el año y reiniciar cada año')}</span></label>
         <p class="help wide" id="num-prev">Ejemplo: ${esc(numPreview(d))}</p></div></div></section>
@@ -2094,13 +2110,13 @@ VIEWS.ajustes = () => {
     if (!d.almacenes.some(a => a.id === S.almSel)) S.almSel = (d.almacenes[0] || {}).id;
     const ai = d.almacenes.findIndex(a => a.id === S.almSel), A = d.almacenes[ai], LP = `almacenes.${ai}.layout`, L = A.layout;
     const owner = c => d.almacenes.find(a => (a.clientes || []).includes(c));
-    const nItems = Object.values(Store.items).filter(it => (A.clientes || []).includes(it.data.cliente)).length;
+    const nItems = Object.values(Store.items).filter(it => almOfItem(it) === A.id).length;
     body = `<div class="split-pane"><section class="panel"><div class="list-nav">${d.almacenes.map(a => `<button class="${a.id === S.almSel ? 'on' : ''}" data-act="almSel" data-k="${esc(a.id)}"><span>${esc(a.nombre)}</span><span class="c">${(a.clientes || []).length} cli.</span></button>`).join('')}</div>
       <div class="panel-b" style="border-top:1px solid var(--line)"><label class="f">Nuevo almacén<span class="selwrap"><input class="inp sm" id="new-alm" placeholder="Ej. Almacén Lisboa"><button class="btn sm" data-act="almAdd">${ico('plus')}</button></span></label></div></section>
       <div><section class="panel"><div class="panel-h"><h3>${esc(A.nombre)}</h3>${d.almacenes.length > 1 ? `<button class="btn sm danger" data-act="almDel" ${(A.clientes || []).length ? 'disabled title="Quita antes sus clientes"' : ''}>${ico('trash')}Eliminar almacén</button>` : ''}</div><div class="panel-b">
         <label class="f" style="max-width:340px">Nombre ${bInp(`almacenes.${ai}.nombre`)}</label>
-        <h3 style="margin:18px 0 8px">Clientes de este almacén</h3><p class="help" style="margin:0 0 8px">Cada cliente pertenece a un único almacén: su material, pedidos y albaranes son de ese almacén. Los clientes se crean en «Listas y marcas».</p>
-        <div class="alm-clients">${listOf('clientes').map(c => { const o = owner(c); const other = o && o.id !== A.id; return `<label class="chk ${other ? 'muted' : ''}"><input type="checkbox" data-act="almCli" data-c="${esc(c)}" ${o && o.id === A.id ? 'checked' : ''} ${other ? 'disabled' : ''}>${esc(c)}${other ? ` <span class="help">(en ${esc(o.nombre)})</span>` : ''}</label>`; }).join('') || '<span class="help">No hay clientes en la lista.</span>'}</div>
+        <h3 style="margin:18px 0 8px">Clientes de este almacén</h3><p class="help" style="margin:0 0 8px">Un cliente puede estar en varios almacenes; cada equipo indica en cuál está. Los clientes se crean en «Listas y marcas».</p>
+        <div class="alm-clients">${listOf('clientes').map(c => { const also = d.almacenes.filter(a => a.id !== A.id && (a.clientes || []).includes(c)).map(a => a.nombre); return `<label class="chk"><input type="checkbox" data-act="almCli" data-c="${esc(c)}" ${(A.clientes || []).includes(c) ? 'checked' : ''}>${esc(c)}${also.length ? ` <span class="help">(también en ${esc(also.join(', '))})</span>` : ''}</label>`; }).join('') || '<span class="help">No hay clientes en la lista.</span>'}</div>
         ${nItems ? `<p class="help" style="margin-top:8px">${nItems} registros de material pertenecen a los clientes de este almacén.</p>` : ''}
       </div></section>
       <h3 style="margin:20px 0 10px">Distribución de ${esc(A.nombre)}</h3>
@@ -2204,7 +2220,8 @@ async function saveSettings() {
     });
   });
   const E = d.estadosSistema || {}, est = d.lists.estados || [];
-  const missing = [...(E.stock || []), E.reservado, E.enviado, ...(E.baja || [])].filter(v => v && !est.includes(v));
+  [E.transito || 'En tránsito', E.retirado || 'Retirado'].forEach(v => { if (!est.includes(v)) est.push(v); }); E.transito = E.transito || 'En tránsito'; E.retirado = E.retirado || 'Retirado';
+  const missing = [...(E.stock || []), E.reservado, E.enviado, E.transito, E.retirado, ...(E.baja || [])].filter(v => v && !est.includes(v));
   if (missing.length) { toast(`Los estados con significado deben existir en la lista de estados: falta «${missing[0]}». Revísalo en Ajustes → General.`, 'warn', 8000); return; }
   if (!(E.stock || []).length) { toast('Elige al menos un estado que cuente como disponible (Ajustes → General).', 'warn'); return; }
   const sinAlm = d.lists.clientes.filter(c => !d.almacenes.some(a => (a.clientes || []).includes(c)));
@@ -2403,11 +2420,52 @@ const ACT = {
   almSel: el => { S.almSel = el.dataset.k; sRerender(); },
   almAdd: () => { const n = $('#new-alm').value.trim(); if (!n) return; const d = draft(); const id = 'alm-' + newId().slice(-8); d.almacenes.push({id, nombre: n, clientes: [], layout: {width: 30, depth: 20, racks: [], zones: []}}); S.almSel = id; sRerender(); },
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
-  almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; d.almacenes.forEach(a => { a.clientes = (a.clientes || []).filter(x => x !== c); }); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
+  almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  eraseOpen: () => openEraseForm([...S.sel]),
+  certMake: async () => {
+    const ids = [...S.sel], sin = ids.map(id => Store.items[id]).filter(it => it && !it.data.borrado);
+    if (sin.length) { toast(`${plural(sin.length, 'equipo')} sin borrado registrado. Regístralo antes con «Registrar borrado».`, 'warn', 6000); return; }
+    if (!await confirmDlg('Certificado de borrado', `Se generará un certificado con ${plural(ids.length, 'equipo')}.`, 'Generar certificado', false)) return;
+    try { const r = await API('POST', '/api/certificates', {itemIds: ids}); Store.loadDeliveries(); S.sel.clear(); renderMain(); docDone(r.delivery, 'Certificado generado', `Se ha generado el certificado de borrado <b class="serial">${esc(r.delivery.number)}</b>. Está también en Albaranes y documentos.`); }
+    catch (ex) { toast(ex.message, 'err', 7000); }
+  },
+  trLotAdd: () => { const id = $('#tr-lot').value, q = Math.floor(Number($('#tr-lot-q').value)); const it = Store.items[id]; if (!it || !(q >= 1) || q > qtyOf(it)) { toast('Cantidad no válida.', 'warn'); return; } S.tr.serials = $('#tr-serials').value; S.tr.bulk = (S.tr.bulk || []).filter(b => b.itemId !== id).concat([{itemId: id, qty: q}]); renderMain(); },
+  trLotDel: el => { S.tr.serials = $('#tr-serials').value; S.tr.bulk.splice(Number(el.dataset.i), 1); renderMain(); },
+  trCreate: async el => {
+    const T = S.tr, lines = $('#tr-serials').value.split(/[\s,;]+/).map(x => cleanScan(x)).filter(Boolean);
+    const found = [], missing = [];
+    lines.forEach(sn => { const it = findBySerial(sn); if (it) found.push(it); else missing.push(sn); });
+    if (missing.length) { toast(`No están en el inventario: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? '…' : ''}`, 'err', 7000); return; }
+    if (!found.length && !(T.bulk || []).length) { toast('Escanea equipos o añade material por cantidad.', 'warn'); return; }
+    const o = almById(T.origen), d = almById(T.destino);
+    if (!await confirmDlg('Crear traspaso', `Se traspasarán ${plural(found.length + (T.bulk || []).reduce((a, b) => a + b.qty, 0), 'unidad', 'unidades')} de <b>${esc(T.cliente)}</b> de <b>${esc(o.nombre)}</b> a <b>${esc(d.nombre)}</b>. Quedarán en tránsito hasta que se reciban.`, 'Crear traspaso', false)) return;
+    el.disabled = true;
+    try { const r = await API('POST', '/api/transfers', {cliente: T.cliente, origen: T.origen, destino: T.destino, itemIds: found.map(x => x.id), bulk: T.bulk || [], carrier: $('#tr-carrier').value, notes: $('#tr-notes').value});
+      S.tr = {cliente: T.cliente, origen: T.origen, destino: T.destino}; Store.loadDeliveries(); renderMain(); docDone(r.delivery, 'Traspaso creado', `Se ha creado el traspaso <b class="serial">${esc(r.delivery.number)}</b>. Cuando llegue el material, púlsalo en Albaranes y documentos y elige «Recibir».`); }
+    catch (ex) { toast(ex.message, 'err', 7000); el.disabled = false; }
+  },
+  trReceive: async el => {
+    const d = (Store.deliveries || []).find(x => x.id === el.dataset.id); if (!d) return;
+    if (!await confirmDlg('Recibir traspaso', `¿Ha llegado el material del traspaso <b class="serial">${esc(d.number)}</b> (${plural(d.units || 0, 'unidad', 'unidades')})? Pasará a estar disponible en el almacén de destino. Después puedes colocarlo con «Colocar en ubicación».`, 'Recibir', false)) return;
+    try { const r = await API('POST', `/api/transfers/${encodeURIComponent(d.id)}/receive`); closeAllLayers(); Store.loadDeliveries(); toast(`Traspaso recibido: ${plural(r.received, 'registro')}.`); }
+    catch (ex) { toast(ex.message, 'err'); }
+  },
+  rtCreate: async el => {
+    const serials = $('#rt-serials').value.split(/[\s,;]+/).map(x => cleanScan(x).toUpperCase()).filter(Boolean);
+    if (!serials.length) { toast('Escribe o escanea los números de serie.', 'warn'); return; }
+    const dup = serials.filter((x, i) => serials.indexOf(x) !== i); if (dup.length) { toast(`Repetidos: ${[...new Set(dup)].join(', ')}`, 'warn'); return; }
+    const cli = $('#rt-cliente').value, sedeId = $('#rt-sede').value, otro = $('#rt-otro').value.trim();
+    const nuevos = serials.filter(sn => !findBySerial(sn)).length;
+    if (!await confirmDlg('Registrar retirada', `Se registrará la retirada de ${plural(serials.length, 'equipo')} de <b>${esc(cli)}</b>${nuevos ? ` (${plural(nuevos, 'equipo nuevo', 'equipos nuevos')} en el inventario)` : ''}.`, 'Registrar retirada', false)) return;
+    el.disabled = true;
+    try { const r = await API('POST', '/api/retiradas', {cliente: cli, sedeId: otro ? '' : sedeId, sede: otro ? {nombre: otro} : {}, almacen: ($('#rt-almacen') || {}).value, cat: $('#rt-cat').value, marca: $('#rt-marca').value, modelo: $('#rt-modelo').value, tipo: $('#rt-tipo').value, lines: serials.map(serie => ({serie})), carrier: $('#rt-carrier').value, notes: $('#rt-notes').value});
+      $('#rt-serials').value = ''; Store.loadDeliveries(); docDone(r.delivery, 'Retirada registrada', `Albarán de retirada <b class="serial">${esc(r.delivery.number)}</b> con ${plural(r.total, 'equipo')}${r.nuevos ? `, de los que ${plural(r.nuevos, 'se ha dado de alta', 'se han dado de alta')} en el inventario` : ''}. Ahora puedes registrar el borrado de datos y generar el certificado desde el inventario (filtra por estado «${esc(EST().retirado)}»).`); el.disabled = false; }
+    catch (ex) { toast(ex.message, 'err', 7000); el.disabled = false; }
+  },
   locLabels: () => locLabels(),
   placeClear: () => { S.placeLoc = null; renderMain(); setTimeout(() => $('#place-code') && $('#place-code').focus(), 30); },
-  routeShow: el => { const o = S.orderDetail; S.route = el.dataset.id; S.routeOrder = o && o.id === el.dataset.id ? o : null; const a = o && almOfClient(o.cliente); if (a) { S.alm = a; LS.set('lbinv.alm', a); } S.mapSel = null; location.hash = '#/mapa'; if (!S.routeOrder) loadRouteOrder(); },
+  routeShow: el => { const o = S.orderDetail; S.route = el.dataset.id; S.routeOrder = o && o.id === el.dataset.id ? o : null; const a = o && (o.almacen || almOfClient(o.cliente)); if (a) { S.alm = a; LS.set('lbinv.alm', a); } S.mapSel = null; location.hash = '#/mapa'; if (!S.routeOrder) loadRouteOrder(); },
   routeExit: () => { S.route = null; S.routeOrder = null; Map3D.buildRoute(); renderMapSide(); },
   routeStop: el => { if (Map3D.mounted && Map3D.locs && Map3D.locs[el.dataset.loc]) Map3D.select(el.dataset.loc, true); },
   dashRange: el => { S.dashRange = Number(el.dataset.r); renderMain(); },
@@ -2462,6 +2520,7 @@ const ACT = {
     Scanner.open({multi, title: el.dataset.title || 'Escanear código', onCode: code => {
       if (t === 'pick') return pickCode(code);
       if (t === 'place-code') return placeCode(code);
+      if (t === 'tr-serials' || t === 'rt-serials') { const ta = $('#' + t); if (ta) { const v = cleanScan(code); if (!ta.value.split(/\s+/).includes(v)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + v; if (t === 'tr-serials') { S.tr = S.tr || {}; S.tr.serials = ta.value; } } return; }
       const inp = document.getElementById(t); if (!inp) return;
       const v = cleanScan(code);
       if (inp.tagName === 'TEXTAREA') inp.value = (inp.value.trim() ? inp.value.trim() + '\n' : '') + v; else inp.value = v;
@@ -2640,6 +2699,7 @@ document.addEventListener('input', e => {
   if (t.id === 'au-q') { S.auditQ = t.value; $('#audit-area').innerHTML = auditTableHTML(); return; }
   if (t.id === 'mv-serials') { mvCountUpdate(); return; }
   if (t.id === 'mv-out') { mvOutUpdate(); return; }
+  if (t.id === 'tr-serials') { S.tr = S.tr || {}; S.tr.serials = t.value; return; }
   if (t.dataset.shape !== undefined) { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; L.shape[Number(t.dataset.shape)][Number(t.dataset.axis)] = Number(t.value) || 0; L.shapeKind = 'custom'; drawLayoutPreview(); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
   if (t.id === 'plan-op') { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; if (L.plan) L.plan.opacity = Number(t.value) / 100; const v = $('#plan-op-val'); if (v) v.textContent = t.value + ' %'; drawLayoutPreview(); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
   if (t.id === 'mv-dest') { const sel = $('#mv-sede'); if (sel) { sel.disabled = !!t.value.trim(); sel.title = t.value.trim() ? 'Se usará el destino escrito en «Otro destino»' : ''; } return; }
@@ -2659,8 +2719,10 @@ document.addEventListener('change', e => {
   if (t.id === 'map-heat') { S.mapHeat = t.value; Map3D.applyHeat(); renderMapSide(); return; }
   if (t.id === 'map-client') { S.mapClient = t.value; Map3D.refresh(); renderMapSide(); return; }
   if (t.id === 'sede-filter') { S.sedeFilter = t.value; sRerender(); return; }
+  if (['tr-cliente', 'tr-origen', 'tr-destino'].includes(t.id)) { const T = S.tr = S.tr || {}; T.serials = ($('#tr-serials') || {}).value || ''; T[t.id.slice(3)] = t.value; if (t.id !== 'tr-destino') T.bulk = []; renderMain(); return; }
+  if (t.id === 'rt-cliente') { S.rt = S.rt || {}; S.rt.cliente = t.value; const keep = $('#rt-serials').value; renderMain(); $('#rt-serials').value = keep; return; }
   if (t.id === 'plan-file' && t.files[0]) { const f = t.files[0]; t.value = ''; toast('Procesando el plano…', 'info'); processPlan(f).then(r => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; L.plan = {image: r.url, opacity: (L.plan && L.plan.opacity) || 0.6, ratio: r.ratio}; sRerender(); toast('Plano cargado. Pulsa «Guardar cambios» para aplicarlo.', 'info'); }).catch(ex => toast(ex.message, 'err')); return; }
-  if (/-cliente$/.test(t.id || '')) refreshLoc(t.id.replace(/-cliente$/, ''), t.closest('.layer') || document);
+  if (/-(cliente|almacen)$/.test(t.id || '')) refreshLoc(t.id.replace(/-(cliente|almacen)$/, ''), t.closest('.layer') || document);
   if (t.id === 'alm-sel') { S.alm = t.value; LS.set('lbinv.alm', t.value); S.page = 1; S.sel.clear(); S.mapSel = null; renderNav(); renderTop(); renderMain(); return; }
   if (t.id === 'map-alm') { S.alm = t.value; LS.set('lbinv.alm', t.value); S.mapSel = null; S.mapClient = ''; renderNav(); renderTop(); Map3D.resetView(); Map3D.refresh(); renderMapSide(); return; }
   if (t.dataset.estlist) { const e = draft().estadosSistema; const k = t.dataset.estlist; e[k] = (e[k] || []).filter(x => x !== t.value); if (t.checked) e[k].push(t.value); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
@@ -3002,7 +3064,7 @@ async function pickCode(code) {
 }
 function openOrderForm(o) {
   const clientes = listOf('clientes');
-  const st = {cliente: o ? o.cliente : (clientes[0] || ''), sedeId: o && o.sede ? o.sede.id || (o.sede.nombre ? '__otra' : '') : '', sede: o ? clone(o.sede || {}) : {}, dueDate: o ? o.dueDate : '', notes: o ? o.notes : '',
+  const st = {almacen: o ? o.almacen || '' : '', cliente: o ? o.cliente : (clientes[0] || ''), sedeId: o && o.sede ? o.sede.id || (o.sede.nombre ? '__otra' : '') : '', sede: o ? clone(o.sede || {}) : {}, dueDate: o ? o.dueDate : '', notes: o ? o.notes : '',
     lines: o ? o.lines.map(l => ({cat: l.cat, qty: l.qty, f: clone(l.f || {}), note: l.note || ''})) : [{cat: (cats()[0] || {}).id, qty: 1, f: {}, note: ''}]};
   const sedes = () => (Store.settings.sedes || []).filter(s => !st.cliente || !s.cliente || s.cliente === st.cliente);
   const L = openLayer(modalHTML(o ? `Editar pedido ${o.number}` : 'Nuevo pedido', `<div id="of-body"></div><div id="of-err" class="err-msg hide" style="margin-top:14px"></div>`,
@@ -3023,6 +3085,7 @@ function openOrderForm(o) {
     const sl = sedes();
     body.innerHTML = `<div class="fgrid">
       <label class="f">Cliente <span class="req">*</span><select class="sel" data-ofs="cliente">${(st.cliente && !clientes.includes(st.cliente) ? [st.cliente] : []).concat(clientes).map(c => `<option ${c === st.cliente ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      ${almsOfClient(st.cliente).length > 1 ? `<label class="f">Preparar desde<select class="sel" data-ofs="almacen">${almsOfClient(st.cliente).map(a => `<option value="${esc(a.id)}" ${(st.almacen || almOfClient(st.cliente)) === a.id ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>` : ''}
       <label class="f">Sede de destino<select class="sel" data-ofs="sedeId"><option value="">— Sin sede —</option>${sl.map(s => `<option value="${esc(s.id)}" ${st.sedeId === s.id ? 'selected' : ''}>${esc(sedeLabel(s))}</option>`).join('')}<option value="__otra" ${st.sedeId === '__otra' ? 'selected' : ''}>Otra dirección…</option></select>
         ${!sl.length ? `<span class="help">No hay sedes para este cliente.${Auth.can('settings.manage') ? ' Puedes añadirlas en Ajustes → Clientes y albaranes.' : ''}</span>` : ''}</label>
       <label class="f">Fecha prevista<input class="inp" type="date" data-ofs="dueDate" value="${esc(st.dueDate)}"></label>
@@ -3060,7 +3123,7 @@ function openOrderForm(o) {
     if (!st.cliente) { err.textContent = 'Indica el cliente.'; err.classList.remove('hide'); return; }
     $$('[data-of]', L.el).forEach(x => { if (x.tagName === 'BUTTON' && x.closest('.modal-f')) x.disabled = true; });
     try {
-      const payload = {id: o ? o.id : undefined, cliente: st.cliente, sedeId: st.sedeId === '__otra' ? '' : st.sedeId, sede: st.sedeId === '__otra' ? st.sede : {}, dueDate: st.dueDate, notes: st.notes, lines: st.lines};
+      const payload = {id: o ? o.id : undefined, almacen: almsOfClient(st.cliente).some(a => a.id === st.almacen) ? st.almacen : '', cliente: st.cliente, sedeId: st.sedeId === '__otra' ? '' : st.sedeId, sede: st.sedeId === '__otra' ? st.sede : {}, dueDate: st.dueDate, notes: st.notes, lines: st.lines};
       let saved = await API('POST', '/api/orders', payload);
       if (act === 'reserve') {
         const r = await API('POST', `/api/orders/${encodeURIComponent(saved.id)}/reserve`);
@@ -3112,16 +3175,16 @@ function deliveryDone(d, mr) {
 VIEWS.albaranes = () => {
   const q = norm(S.dlQ || '');
   const list = (Store.deliveries || []).filter(d => !q || norm([d.number, d.cliente, sedeLabel(d.sede), d.orderNumber, d.ref, d.carrier, d.createdByName].join(' ')).includes(q));
-  return `<div class="page-head"><div><h1>Albaranes de entrega</h1><p>Cada salida con albarán queda aquí para volver a descargarla cuando haga falta.</p></div>${Auth.can('inv.move') ? `<a class="btn" href="#/movimientos">${ico('swap')}Nueva salida</a>` : ''}</div>
+  return `<div class="page-head"><div><h1>Albaranes y documentos</h1><p>Albaranes de entrega, traspasos entre almacenes, retiradas y certificados de borrado.</p></div>${Auth.can('inv.move') ? `<a class="btn" href="#/movimientos">${ico('swap')}Nueva salida</a>` : ''}</div>
     <section class="panel"><div class="toolbar"><input class="inp sm" id="dl-q" placeholder="Buscar por número, cliente, sede, pedido…" value="${esc(S.dlQ || '')}"></div>
-    <div id="dl-area">${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Albarán</th><th>Fecha</th><th>Cliente</th><th>Destino</th><th style="text-align:right">Uds.</th><th>Pedido</th><th>Preparado por</th><th></th></tr></thead><tbody>
-      ${list.map(d => `<tr data-act="dlOpen" data-id="${esc(d.id)}"><td><b class="serial">${esc(d.number)}</b></td><td>${fmtDT(d.date)}</td><td>${esc(d.cliente)}</td><td>${esc(sedeLabel(d.sede)) || '<span class="muted">—</span>'}</td><td class="num" style="text-align:right">${d.units}</td><td>${d.orderNumber ? `<span class="serial">${esc(d.orderNumber)}</span>` : '<span class="muted">—</span>'}</td><td>${esc(d.createdByName || d.createdBy)}</td>
-        <td style="text-align:right;white-space:nowrap">${d.emailedTo ? `<span class="help" title="Enviado a ${esc(d.emailedTo)}">${ico('send')}</span> ` : ''}${Store.mailEnabled && Auth.can('inv.move') ? `<button class="btn sm" data-act="dlMail" data-id="${esc(d.id)}">${ico('send')}Correo</button> ` : ''}${Auth.can('inv.delete') ? `<button class="btn sm icon danger" data-act="dlDelete" data-id="${esc(d.id)}" title="Eliminar albarán" aria-label="Eliminar albarán">${ico('trash')}</button> ` : ''}<a class="btn sm" href="${pdfUrl(d.id)}" target="_blank" rel="noopener" data-act="noop">${ico('file')}PDF</a></td></tr>`).join('')}
+    <div id="dl-area">${list.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Documento</th><th>Fecha</th><th>Cliente</th><th>Destino</th><th style="text-align:right">Uds.</th><th>Pedido</th><th>Preparado por</th><th></th></tr></thead><tbody>
+      ${list.map(d => `<tr data-act="dlOpen" data-id="${esc(d.id)}"><td><b class="serial">${esc(d.number)}</b><span class="doc-kind k-${esc(d.kind || 'albaran')}">${esc(DOC_KIND[d.kind] || 'Albarán')}</span>${d.kind === 'traspaso' ? (d.receivedAt ? '<span class="help" style="display:block">Recibido</span>' : '<span class="help" style="display:block;color:var(--warn)">En tránsito</span>') : ''}</td><td>${fmtDT(d.date)}</td><td>${esc(d.cliente)}</td><td>${esc(sedeLabel(d.sede)) || '<span class="muted">—</span>'}</td><td class="num" style="text-align:right">${d.units}</td><td>${d.orderNumber ? `<span class="serial">${esc(d.orderNumber)}</span>` : '<span class="muted">—</span>'}</td><td>${esc(d.createdByName || d.createdBy)}</td>
+        <td style="text-align:right;white-space:nowrap">${d.kind === 'traspaso' && !d.receivedAt && Auth.can('inv.move') ? `<button class="btn sm primary" data-act="trReceive" data-id="${esc(d.id)}">${ico('down')}Recibir</button> ` : ''}${d.emailedTo ? `<span class="help" title="Enviado a ${esc(d.emailedTo)}">${ico('send')}</span> ` : ''}${Store.mailEnabled && Auth.can('inv.move') ? `<button class="btn sm" data-act="dlMail" data-id="${esc(d.id)}">${ico('send')}Correo</button> ` : ''}${Auth.can('inv.delete') ? `<button class="btn sm icon danger" data-act="dlDelete" data-id="${esc(d.id)}" title="Eliminar albarán" aria-label="Eliminar albarán">${ico('trash')}</button> ` : ''}<a class="btn sm" href="${pdfUrl(d.id)}" target="_blank" rel="noopener" data-act="noop">${ico('file')}PDF</a></td></tr>`).join('')}
       </tbody></table></div>` : `<div class="empty"><h3>${(Store.deliveries || []).length ? 'Ningún albarán coincide' : 'Todavía no hay albaranes'}</h3><p>Se crean al enviar un pedido o al hacer una salida por escaneo con la opción de albarán.</p></div>`}</div></section>`;
 };
 async function openDelivery(id) {
   let d; try { d = await API('GET', '/api/deliveries/' + encodeURIComponent(id)); } catch (ex) { toast(ex.message, 'err'); return; }
-  openLayer(modalHTML(`Albarán ${d.number}`, `<dl class="kv"><dt>Fecha</dt><dd>${fmtDT(d.date)}</dd><dt>Cliente</dt><dd>${esc(d.cliente)}</dd><dt>Destino</dt><dd>${esc([d.sede.nombre, d.sede.direccion, [d.sede.cp, d.sede.ciudad].filter(Boolean).join(' ')].filter(Boolean).join(', ')) || '—'}</dd>
+  openLayer(modalHTML(`${DOC_KIND[d.kind] || 'Albarán'} ${d.number}`, `<dl class="kv">${d.kind === 'traspaso' ? `<dt>Traspaso</dt><dd>${esc((almById(d.origen) || {}).nombre || d.origen)} → ${esc((almById(d.destino) || {}).nombre || d.destino)}${d.receivedAt ? `<div class="help">Recibido el ${fmtDT(d.receivedAt)} por ${esc(d.receivedBy)}</div>` : '<div class="help" style="color:var(--warn)">Pendiente de recibir</div>'}</dd>` : ''}<dt>Fecha</dt><dd>${fmtDT(d.date)}</dd><dt>Cliente</dt><dd>${esc(d.cliente)}</dd><dt>Destino</dt><dd>${esc([d.sede.nombre, d.sede.direccion, [d.sede.cp, d.sede.ciudad].filter(Boolean).join(' ')].filter(Boolean).join(', ')) || '—'}</dd>
       ${d.orderNumber ? `<dt>Pedido</dt><dd>${esc(d.orderNumber)}</dd>` : ''}${d.emailedTo ? `<dt>Enviado por correo</dt><dd>${esc(d.emailedTo)}<div class="help">${fmtDT(d.emailedAt)}</div></dd>` : ''}<dt>Transportista</dt><dd>${esc(d.carrier) || '—'}</dd><dt>Referencia</dt><dd>${esc(d.ref) || '—'}</dd><dt>Preparado por</dt><dd>${esc(d.createdByName || d.createdBy)}</dd>${d.notes ? `<dt>Observaciones</dt><dd style="white-space:pre-wrap">${esc(d.notes)}</dd>` : ''}</dl>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Categoría</th><th>Descripción</th><th>Nº de serie</th><th style="text-align:right">Uds.</th></tr></thead><tbody>
     ${d.lines.map(l => `<tr ${Store.items[l.itemId] ? `data-act="openItem" data-id="${esc(l.itemId)}"` : 'style="cursor:default"'}><td>${esc(l.catName)}</td><td>${esc(l.title)}</td><td class="serial">${esc(l.serie || '—')}</td><td class="num" style="text-align:right">${l.qty}</td></tr>`).join('')}</tbody></table></div>`,
@@ -3591,7 +3654,7 @@ function isoWarehouse(items) {
   const L = A.layout || {}, racks = L.racks || [], zones = L.zones || [];
   if (!racks.length && !zones.length) return {svg: '', cap: 0};
   const E = EST();
-  const here = items.filter(i => almOfClient(i.data.cliente) === A.id && !E.baja.includes(i.data.estado) && i.data.estado !== E.enviado);
+  const here = items.filter(i => almOfItem(i) === A.id && !E.baja.includes(i.data.estado) && i.data.estado !== E.enviado);
   const units = {}; here.forEach(i => { units[i.data.ubicacion] = (units[i.data.ubicacion] || 0) + qtyOf(i); });
   const K = 20, P = (x, y, z) => [(x - z) * 0.866 * K, ((x + z) * 0.5 - y) * K];
   const pts = a => a.map(p => P(...p).map(v => v.toFixed(1)).join(',')).join(' ');
@@ -3785,7 +3848,7 @@ function heatValues() {
 }
 // Calcula el recorrido de recogida: desde la puerta, por cada ubicación, en el orden más corto.
 function pickRoute(o) {
-  const A = almById(almOfClient(o.cliente)) || almById(mapAlm()); if (!A) return null;
+  const A = almById(o.almacen) || almById(almOfClient(o.cliente)) || almById(mapAlm()); if (!A) return null;
   const L = A.layout, racks = L.racks || [], zones = L.zones || [];
   const doors = doorGeom(L);
   const start = doors.length ? [doors[0].C[0] + doors[0].n[0] * 1.2, doors[0].C[1] + doors[0].n[1] * 1.2] : [0, (Number(L.depth) || 20) / 2 - 1];
@@ -3870,3 +3933,75 @@ const plantaOf = (L, id) => id ? (L.plantas || []).find(p => p.id === id) : null
 const plantaAlt = (L, id) => { const p = plantaOf(L, id); return p ? Math.max(0, Number(p.altura) || 0) : 0; };
 const mapPlantaVis = el => !S.mapPlanta || (S.mapPlanta === '0' ? !el.planta : el.planta === S.mapPlanta);
 const editPlanta = el => (el.planta || '') === (S.plantaSel || '');
+
+/* =========================================================
+   Traspasos, retiradas, borrado de datos y certificados
+   ========================================================= */
+const DOC_KIND = {albaran: 'Albarán', traspaso: 'Traspaso', retirada: 'Retirada', certificado: 'Certificado'};
+const EST2 = d => Object.assign({transito: 'En tránsito', retirado: 'Retirado'}, d.estadosSistema || {});
+const ERASE_METHODS = ['NIST 800-88 Clear', 'NIST 800-88 Purge', 'Borrado criptográfico', 'Secure Erase del fabricante', 'Sobrescritura (3 pasadas)', 'Destrucción física del disco'];
+function transferPanelHTML() {
+  const T = S.tr = S.tr || {};
+  const clis = listOf('clientes').filter(c => almsOfClient(c).length > 1);
+  if (!clis.includes(T.cliente)) T.cliente = clis[0] || '';
+  const alms = almsOfClient(T.cliente);
+  if (!alms.some(a => a.id === T.origen)) T.origen = (alms.find(a => a.id === curAlm()) || alms[0] || {}).id;
+  const dests = alms.filter(a => a.id !== T.origen);
+  if (!dests.some(a => a.id === T.destino)) T.destino = (dests[0] || {}).id;
+  T.bulk = T.bulk || [];
+  const lots = Object.values(Store.items).filter(it => !(catById(it.cat) || {}).serialized && it.data.cliente === T.cliente && almOfItem(it) === T.origen && isStock(it.data.estado) && !it.data.pedido && qtyOf(it) > 0);
+  return `<section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Traspaso entre almacenes</h3><span class="help">El material queda «En tránsito» hasta que el almacén de destino lo recibe.</span></div></div><div class="panel-b">
+    ${!clis.length ? '<p class="muted" style="margin:0">Para traspasar, asigna el cliente a más de un almacén en Ajustes → Almacenes.</p>' : `<div class="fgrid">
+      <label class="f">Cliente<select class="sel" id="tr-cliente">${clis.map(c => `<option ${c === T.cliente ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+      <label class="f">Desde<select class="sel" id="tr-origen">${alms.map(a => `<option value="${esc(a.id)}" ${a.id === T.origen ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>
+      <label class="f">Hasta<select class="sel" id="tr-destino">${dests.map(a => `<option value="${esc(a.id)}" ${a.id === T.destino ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>
+      <label class="f">Transportista<input class="inp" id="tr-carrier" value="${esc(T.carrier || '')}"></label>
+      <label class="f wide"><span class="row" style="justify-content:space-between">Números de serie ${scanBtn('tr-serials', true, 'Traspaso')}</span><textarea class="ta serial" id="tr-serials" rows="4" placeholder="Uno por línea">${esc(T.serials || '')}</textarea></label>
+      ${lots.length ? `<div class="f wide"><span>Material por cantidad</span><div class="row"><select class="sel" id="tr-lot" style="flex:1">${lots.map(it => `<option value="${esc(it.id)}">${esc(itemTitle(it))} (${qtyOf(it)} uds.${it.data.ubicacion ? ', ' + esc(locName(it.data.ubicacion)) : ''})</option>`).join('')}</select><input class="inp" id="tr-lot-q" type="number" min="1" value="1" style="width:90px"><button class="btn" data-act="trLotAdd">${ico('plus')}Añadir</button></div>
+        ${T.bulk.length ? `<div class="chips" style="margin-top:8px">${T.bulk.map((b, i) => `<span class="chip">${esc(itemTitle(Store.items[b.itemId] || {data: {}, cat: ''}))}: ${b.qty} uds. <button data-act="trLotDel" data-i="${i}" aria-label="Quitar">×</button></span>`).join('')}</div>` : ''}</div>` : ''}
+      <label class="f wide">Observaciones<input class="inp" id="tr-notes" value="${esc(T.notes || '')}"></label></div>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn primary" data-act="trCreate" ${dests.length ? '' : 'disabled'}>${ico('swap')}Crear traspaso</button></div>`}
+  </div></section>`;
+}
+function retiradaPanelHTML() {
+  const R = S.rt = S.rt || {};
+  const clis = listOf('clientes'); if (!clis.includes(R.cliente)) R.cliente = clis[0] || '';
+  const sedes = (Store.settings.sedes || []).filter(x => x.cliente === R.cliente);
+  const alms = almsOfClient(R.cliente);
+  return `<section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Retirada de equipos del cliente</h3><span class="help">Para los equipos que recogéis (renovaciones, bajas, fin de vida). Los que no están en el inventario se dan de alta solos, y se genera un albarán de retirada.</span></div></div><div class="panel-b"><div class="fgrid">
+    <label class="f">Cliente<select class="sel" id="rt-cliente">${clis.map(c => `<option ${c === R.cliente ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></label>
+    <label class="f">Recogido en<select class="sel" id="rt-sede"><option value="">— Escribir otro sitio —</option>${sedes.map(x => `<option value="${esc(x.id)}">${esc(sedeLabel(x))}</option>`).join('')}</select></label>
+    <label class="f">Otro sitio<input class="inp" id="rt-otro" placeholder="Si no está en la lista"></label>
+    ${alms.length > 1 ? `<label class="f">Entra en el almacén<select class="sel" id="rt-almacen">${alms.map(a => `<option value="${esc(a.id)}" ${a.id === curAlm() ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select></label>` : ''}
+    <label class="f">Categoría<select class="sel" id="rt-cat">${cats().filter(c => c.serialized).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('')}</select></label>
+    <label class="f">Marca (si es la misma para todos)<input class="inp" id="rt-marca" list="dl-marcas"></label>
+    <label class="f">Modelo<input class="inp" id="rt-modelo"></label>
+    <label class="f">Tipo<input class="inp" id="rt-tipo" placeholder="Portátil, Sobremesa…"></label>
+    <label class="f wide"><span class="row" style="justify-content:space-between">Números de serie ${scanBtn('rt-serials', true, 'Retirada')}</span><textarea class="ta serial" id="rt-serials" rows="4" placeholder="Uno por línea"></textarea></label>
+    <label class="f">Transportista<input class="inp" id="rt-carrier"></label>
+    <label class="f wide">Observaciones<input class="inp" id="rt-notes" placeholder="Estado de los equipos, incidencias…"></label></div>
+    <datalist id="dl-marcas">${listOf('marcas_equipo').map(m => `<option value="${esc(m)}">`).join('')}</datalist>
+    <div class="row" style="margin-top:14px"><span class="spacer"></span><button class="btn primary" data-act="rtCreate">${ico('down')}Registrar retirada</button></div></div></section>`;
+}
+function docDone(d, title, text) {
+  openLayer(modalHTML(title, `<p style="margin-top:0">${text}</p>`, `<button class="btn" data-close>Cerrar</button><a class="btn primary" href="${pdfUrl(d.id)}" target="_blank" rel="noopener" data-act="noop">${ico('file')}Abrir PDF</a>`, 'narrow'));
+}
+function openEraseForm(ids) {
+  const items = ids.map(id => Store.items[id]).filter(Boolean);
+  const L = openLayer(modalHTML(`Registrar borrado de datos (${plural(items.length, 'equipo')})`, `<div class="fgrid">
+    <label class="f">Método<select class="sel" id="er-metodo">${ERASE_METHODS.map(m => `<option>${m}</option>`).join('')}</select></label>
+    <label class="f">Herramienta o software<input class="inp" id="er-herr" placeholder="Blancco, KillDisk, BIOS Secure Erase…"></label>
+    <label class="f">Fecha<input class="inp" type="date" id="er-fecha" value="${new Date().toISOString().slice(0, 10)}"></label>
+    <label class="f">Técnico<input class="inp" id="er-tec" value="${esc(Auth.user.name || Auth.user.username)}"></label>
+    <label class="f">Resultado<select class="sel" id="er-res"><option>Correcto</option><option>Fallido</option></select></label>
+    <label class="f">Cambiar estado a<select class="sel" id="er-estado"><option value="">Sin cambios</option>${listOf('estados').map(v => `<option>${esc(v)}</option>`).join('')}</select></label>
+    <label class="f wide">Observaciones<input class="inp" id="er-notas"></label></div>
+    <p class="help" style="margin:12px 0 0">Queda registrado en la ficha e historial de cada equipo y aparecerá en el certificado de borrado.</p><div id="er-err" class="err-msg hide" style="margin-top:10px"></div>`,
+    `<button class="btn" data-close>Cancelar</button><button class="btn primary" id="er-ok">${ico('shield')}Registrar</button>`));
+  $('#er-ok', L.el).onclick = async () => {
+    try {
+      const r = await API('POST', '/api/erasures', {itemIds: ids, metodo: $('#er-metodo', L.el).value, herramienta: $('#er-herr', L.el).value, fecha: $('#er-fecha', L.el).value, tecnico: $('#er-tec', L.el).value, resultado: $('#er-res', L.el).value, estado: $('#er-estado', L.el).value, notas: $('#er-notas', L.el).value});
+      closeLayer(L); toast(`Borrado registrado en ${plural(r.count, 'equipo')}.`);
+    } catch (ex) { const e = $('#er-err', L.el); e.textContent = ex.message; e.classList.remove('hide'); }
+  };
+}

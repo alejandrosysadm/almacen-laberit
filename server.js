@@ -102,10 +102,15 @@ const isTotal = u => !!scopeOf(u).all;
 function canClient(u, cliente) {
   const sc = scopeOf(u); if (sc.all) return true;
   if (!cliente) return false;
-  const a = clientAlmacen(cliente);
-  return !!a && Array.isArray(sc.almacenes[a]) && sc.almacenes[a].includes(cliente);
+  return almacenesOf().some(a => (a.clientes || []).includes(cliente) && Array.isArray(sc.almacenes[a.id]) && sc.almacenes[a.id].includes(cliente));
 }
-const canItem = (u, it) => canClient(u, it && it.data && it.data.cliente);
+// El almacén va en cada equipo; si falta (datos antiguos), se usa el primero que tenga su cliente.
+function itemAlm(it) { const a = it && it.data && it.data.almacen; if (a && almacenesOf().some(x => x.id === a)) return a; return clientAlmacen(it && it.data && it.data.cliente); }
+function canItem(u, it) {
+  const sc = scopeOf(u); if (sc.all) return true;
+  const cli = it && it.data && it.data.cliente, a = itemAlm(it);
+  return !!(cli && a && Array.isArray(sc.almacenes[a]) && sc.almacenes[a].includes(cli));
+}
 function cleanScope(sc) {
   if (!sc || sc.all) return null;
   const out = { almacenes: {} };
@@ -114,7 +119,7 @@ function cleanScope(sc) {
 }
 function estados() {
   const e = settings().estadosSistema || {};
-  return { stock: Array.isArray(e.stock) && e.stock.length ? e.stock : ['En stock'], reservado: e.reservado || 'Reservado', enviado: e.enviado || 'Enviado', baja: Array.isArray(e.baja) ? e.baja : ['Baja'] };
+  return { stock: Array.isArray(e.stock) && e.stock.length ? e.stock : ['En stock'], reservado: e.reservado || 'Reservado', enviado: e.enviado || 'Enviado', baja: Array.isArray(e.baja) ? e.baja : ['Baja'], transito: e.transito || 'En tránsito', retirado: e.retirado || 'Retirado' };
 }
 function allLocations() {
   const racks = [], zones = [];
@@ -656,7 +661,7 @@ function sanitizeSettings(s) {
   out.stockAlertEmails = emails(out.stockAlertEmails);
   const nu = isObj(out.numeracion) ? out.numeracion : {};
   const pre = (v, d) => /^[A-Za-z0-9]{1,10}$/.test(String(v || '').trim()) ? String(v).trim().toUpperCase() : d;
-  out.numeracion = { albaran: pre(nu.albaran, 'ALB'), pedido: pre(nu.pedido, 'PED'), anual: nu.anual !== false, digitos: num(nu.digitos, 3, 8, 4) };
+  out.numeracion = { albaran: pre(nu.albaran, 'ALB'), pedido: pre(nu.pedido, 'PED'), traspaso: pre(nu.traspaso, 'TRA'), retirada: pre(nu.retirada, 'RET'), certificado: pre(nu.certificado, 'CERT'), anual: nu.anual !== false, digitos: num(nu.digitos, 3, 8, 4) };
   const rc = isObj(out.recogida) ? out.recogida : {};
   out.recogida = { titulo: s40(rc.titulo, 60), columns: (Array.isArray(rc.columns) ? rc.columns : []).filter(k => /^[a-z0-9_]{1,40}$/.test(k)).slice(0, 12), showSummary: rc.showSummary !== false, showSignature: rc.showSignature !== false, groupByLocation: rc.groupByLocation !== false };
   const labels = v => { const o = {}; if (isObj(v)) Object.entries(v).slice(0, 40).forEach(([k, l]) => { if (/^[a-z0-9_]{1,40}$/.test(k) && String(l || '').trim()) o[k] = s40(l, 40); }); return o; };
@@ -668,7 +673,8 @@ function sanitizeSettings(s) {
   (out.stockRules || []).forEach((r, i) => { const src = (s.stockRules || [])[i] || {}; r.almacen = s40(src.almacen, 64); });
   const est = isObj(out.estadosSistema) ? out.estadosSistema : {};
   const arr = v => (Array.isArray(v) ? v : [v]).map(x => s40(x, 60)).filter(Boolean);
-  out.estadosSistema = { stock: arr(est.stock).length ? arr(est.stock) : ['En stock'], reservado: s40(est.reservado, 60) || 'Reservado', enviado: s40(est.enviado, 60) || 'Enviado', baja: arr(est.baja) };
+  out.estadosSistema = { stock: arr(est.stock).length ? arr(est.stock) : ['En stock'], reservado: s40(est.reservado, 60) || 'Reservado', enviado: s40(est.enviado, 60) || 'Enviado', baja: arr(est.baja), transito: s40(est.transito, 60) || 'En tránsito', retirado: s40(est.retirado, 60) || 'Retirado' };
+  if (out.lists && Array.isArray(out.lists.estados)) [out.estadosSistema.transito, out.estadosSistema.retirado].forEach(v => { if (!out.lists.estados.includes(v)) out.lists.estados.push(v); });
   const geom = L => ({ width: num(L && L.width, 5, 500, 34), depth: num(L && L.depth, 5, 500, 24),
     racks: (Array.isArray(L && L.racks) ? L.racks : []).filter(isObj).slice(0, 300).map(r => ({ id: s40(r.id, 40) || newId(), name: s40(r.name, 40), x: Number(r.x) || 0, z: Number(r.z) || 0, rot: Number(r.rot) === 90 ? 90 : 0, len: num(r.len, 1, 100, 4), levels: num(r.levels, 1, 10, 4), huecos: Math.min(50, Math.max(0, Math.round(Number(r.huecos) || 0))), planta: s40(r.planta, 40), elev: Math.min(10, Math.max(0, Number(r.elev) || 0)) })),
     shape: Array.isArray(L && L.shape) && L.shape.length >= 3 ? L.shape.slice(0, 40).map(q => [Number(Array.isArray(q) ? q[0] : 0) || 0, Number(Array.isArray(q) ? q[1] : 0) || 0]) : undefined,
@@ -684,7 +690,7 @@ function sanitizeSettings(s) {
     const L = geom(a.layout);
     [...L.racks, ...L.zones].forEach(x => { while (seenLoc.has(x.id)) x.id = x.id + '-' + newId().slice(-4); seenLoc.add(x.id); });
     return { id: /^[A-Za-z0-9_-]{2,64}$/.test(a.id || '') ? a.id : newId(), nombre: s40(a.nombre, 80) || 'Almacén',
-      clientes: (Array.isArray(a.clientes) ? a.clientes : []).map(c => s40(c, 120)).filter(c => c && !seenCli.has(c) && seenCli.add(c)), layout: L };
+      clientes: [...new Set((Array.isArray(a.clientes) ? a.clientes : []).map(c => s40(c, 120)).filter(Boolean))], layout: L };
   });
   out.layout = out.almacenes[0].layout;
   out.stockRemindDays = num(out.stockRemindDays, 0, 365, 7);
@@ -812,7 +818,8 @@ api.post('/items', requireAuth, (req, res) => {
       if (!validItem(it)) throw httpErr(400, 'Hay un registro con formato no válido.');
       const ex = getItemStmt.get(it.id);
       if (ex && !canItem(u, rowToItem(ex))) throw httpErr(403, 'No tienes acceso a ese material.');
-      if (!canClient(u, it.data.cliente)) throw httpErr(403, it.data.cliente ? `No tienes acceso al cliente ${it.data.cliente}.` : 'Indica un cliente al que tengas acceso.');
+      if (!it.data.almacen || !almacenesOf().some(a => a.id === it.data.almacen)) it.data.almacen = (ex && JSON.parse(ex.data).almacen) || clientAlmacen(it.data.cliente) || almacenesOf()[0].id;
+      if (!canItem(u, it)) throw httpErr(403, it.data.cliente ? `No tienes acceso al cliente ${it.data.cliente}.` : 'Indica un cliente al que tengas acceso.');
       if (ex ? !canAny(u, 'inv.edit', 'inv.move') : !canAny(u, 'inv.create', 'inv.move', 'inv.import'))
         throw httpErr(403, ex ? 'No tienes permiso para modificar material.' : 'No tienes permiso para dar de alta material.');
       const dataStr = JSON.stringify(it.data);
@@ -1058,7 +1065,7 @@ const upsertItem = (it, username) => {
   it.history = cleanHistory(it.history);
   upsertItemStmt.run({ id: it.id, cat: it.cat, sn: normSerial(it.data.serie), data: JSON.stringify(it.data), history: JSON.stringify(it.history), createdAt: it.createdAt, createdBy: it.createdBy, updatedAt: it.updatedAt, updatedBy: it.updatedBy });
 };
-const alerts = setupAlerts({ db, settings, audit, rowToItem, estados, clientAlmacen });
+const alerts = setupAlerts({ db, settings, audit, rowToItem, estados, clientAlmacen, itemAlm });
 onItemsChanged = alerts.schedule;
 api.get('/stock-alerts', requireAuth, requirePerm('inv.view'), (req, res) => res.json(alerts.compute().map(x => ({ id: x.rule.id, name: x.rule.name, min: x.rule.min, count: x.count }))));
 api.post('/stock-alerts/test', requireAuth, requirePerm('settings.manage'), ah(async (req, res) => {
@@ -1066,7 +1073,7 @@ api.post('/stock-alerts/test', requireAuth, requirePerm('settings.manage'), ah(a
   await alerts.check();
   res.json({ ok: true, low: alerts.compute().filter(x => x.count < x.rule.min).map(x => x.rule.name) });
 }));
-registerOrders(api, { db, requireAuth, requirePerm, ah, httpErr, audit, settings, can, newId, nowISO, normSerial, broadcast, rowToItem, upsertItem, emitItems, canClient, canItem, isTotal, estados, allLocations });
+registerOrders(api, { db, requireAuth, requirePerm, ah, httpErr, audit, settings, can, newId, nowISO, normSerial, broadcast, rowToItem, upsertItem, emitItems, canClient, canItem, isTotal, estados, allLocations, itemAlm, almacenesOf });
 
 api.use((req, res) => res.status(404).json({ error: 'No encontrado.' }));
 api.use((err, req, res, next) => {
@@ -1106,6 +1113,18 @@ if (CFG.tlsPfx) {
 } else {
   server = http.createServer(app);
 }
+(function migrarAlmacenes() {
+  const st = storedSettings();
+  if (st && st.lists && Array.isArray(st.lists.estados)) {
+    const E = estados(); let ch = false;
+    [E.transito, E.retirado].forEach(v => { if (!st.lists.estados.includes(v)) { st.lists.estados.push(v); ch = true; } });
+    if (ch) saveSettings(st);
+  }
+  const rows = db.prepare('SELECT id, data FROM items').all(); let n = 0;
+  const up = db.prepare('UPDATE items SET data = ? WHERE id = ?');
+  db.transaction(() => rows.forEach(r => { const d = JSON.parse(r.data); if (!d.almacen) { const a = clientAlmacen(d.cliente) || (almacenesOf()[0] || {}).id; if (a) { d.almacen = a; up.run(JSON.stringify(d), r.id); n++; } } }))();
+  if (n) console.log(`Migración: almacén asignado a ${n} registros.`);
+})();
 mail.setAccent((settings().tema || {}).primario);
 server.listen(CFG.port, CFG.host, () => {
   console.log(`Almacén Laberit escuchando en ${proto}://${CFG.host === '0.0.0.0' ? 'localhost' : CFG.host}:${CFG.port}`);

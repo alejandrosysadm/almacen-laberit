@@ -136,6 +136,19 @@ Todo aparece en el mapa 3D, en la vista en planta y en el dibujo del panel de in
 - **Ruta en el mapa:** en un pedido en preparación, el botón «Ruta en el mapa» dibuja en el mapa 3D el recorrido desde la primera puerta del almacén por cada ubicación con material reservado, en el orden más corto (vecino más cercano mejorado con 2-opt, distancias en ángulo recto). El panel lateral lista las paradas con lo que hay que coger en cada balda. Al confirmar la recogida, las paradas pasan a verde en tiempo real.
 - **Mapa de calor:** en el panel del mapa 3D se puede colorear cada estantería por ocupación, antigüedad media del material o movimientos de los últimos 30 días, de verde a rojo.
 
+## Varios almacenes por cliente y traspasos
+
+Un cliente puede asignarse a varios almacenes (Ajustes → Almacenes) y cada equipo indica en qué almacén está. Al actualizar desde una versión anterior, cada equipo queda en el almacén donde estaba su cliente.
+
+- **Pedidos:** si el cliente está en varios almacenes, se elige desde cuál se prepara («Preparar desde»).
+- **Traspasos:** en Entradas y salidas → «Traspaso entre almacenes» se elige cliente, origen y destino, y se escanean los equipos o se añade material por cantidad. Se genera un albarán de traspaso (prefijo TRA) y el material queda «En tránsito», sin contar como disponible, hasta que en Albaranes y documentos se pulsa «Recibir».
+
+## Retiradas y certificados de borrado
+
+- **Retirada:** en Entradas y salidas → «Retirada de equipos del cliente» se registran los equipos recogidos. Los que no estaban en el inventario se dan de alta. Se genera un albarán de retirada (prefijo RET) y los equipos quedan como «Retirado».
+- **Borrado de datos:** seleccionando equipos en el inventario → «Registrar borrado», con método (NIST 800-88 Clear o Purge, borrado criptográfico, Secure Erase, sobrescritura, destrucción física), herramienta, fecha, técnico y resultado. Queda en la ficha y en el historial de cada equipo.
+- **Certificado de borrado:** seleccionando equipos con borrado registrado → «Certificado de borrado». Genera un PDF (prefijo CERT) con los equipos, el método de cada uno, la declaración conforme a NIST SP 800-88 y al artículo 32 del RGPD, y los recuadros de firma.
+
 ## Huecos y etiquetas de ubicación
 
 - **Huecos:** en Ajustes → Almacenes, la columna «Huecos» indica cuántos huecos tiene cada balda de una estantería. La ubicación de un equipo pasa a ser exacta, como `B2-3-4` (estantería, balda, hueco), y se ve en la ficha, la lista de recogida, la ruta y el mapa 3D.
