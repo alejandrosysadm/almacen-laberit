@@ -133,6 +133,10 @@ Todo aparece en el mapa 3D, en la vista en planta y en el dibujo del panel de in
 - **Forma:** en Ajustes → Almacenes → «Forma del almacén», el contorno puede ser un rectángulo o un polígono (formas rápidas en L, U y T, ajustables vértice a vértice). Las paredes del mapa siguen el contorno, y las puertas se colocan en cualquiera de sus tramos.
 - **Plantas y altillos:** cada altillo tiene nombre, altura y superficie. Con «Editando: …» se elige la planta a la que van las estanterías, zonas y elementos que se añaden. En el mapa 3D el altillo aparece como una plataforma con pilares y su contenido encima, y el selector «Planta» muestra todas o solo una. El nombre de la ubicación indica la planta, por ejemplo «Estantería M1 (Altillo)».
 
+## Idioma
+
+La interfaz está disponible en español e inglés. El idioma por defecto se elige en Ajustes → General y cada usuario puede elegir el suyo en «Mi cuenta». Los textos de la interfaz se traducen con el diccionario `public/i18n/en.js` (texto en español → texto en inglés; `{n}` es un número y `{x}` cualquier texto), que se carga solo cuando se usa el inglés. Los datos escritos por los usuarios (clientes, categorías, estados, descripciones del registro) se muestran tal como se escribieron. Los documentos PDF y los correos siguen en español.
+
 ## Mapa 3D
 
 Dos estilos, a elegir en el panel del mapa (se recuerda en cada navegador): **Realista** (estanterías con puntales y largueros, baldas, arriostramientos, cajas de cartón con la franja de su categoría, sombras y suelo de hormigón) y **Esquemático** (cubos del color de cada categoría). Vistas isométrica, superior y frontal, brújula, pantalla completa y botón para guardar una imagen PNG. La cámara se mueve con suavidad y entra con una animación al abrir el mapa.

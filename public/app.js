@@ -8,16 +8,21 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const clone = o => JSON.parse(JSON.stringify(o));
 const nowISO = () => new Date().toISOString();
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
-const fmtDate = s => { if (!s) return ''; const d = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(d) ? esc(s) : d.toLocaleDateString('es-ES'); };
-const fmtDT = s => s ? new Date(s).toLocaleString('es-ES', {dateStyle:'short', timeStyle:'short'}) : '';
+const fmtDate = s => { if (!s) return ''; const d = new Date(s.length === 10 ? s + 'T00:00:00' : s); return isNaN(d) ? esc(s) : d.toLocaleDateString(LOC()); };
+const fmtDT = s => s ? new Date(s).toLocaleString(LOC(), {dateStyle:'short', timeStyle:'short'}) : '';
 const norm = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const slug = s => norm(s).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'x';
 const newId = () => {
   const a = new Uint8Array(10); crypto.getRandomValues(a);
   return Date.now().toString(36) + [...a].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
 };
-const plural = (n, s, p) => `${n.toLocaleString('es-ES')} ${n === 1 ? s : (p || s + 's')}`;
+const plural = (n, s, p) => `${n.toLocaleString(LOC())} ${n === 1 ? s : (p || s + 's')}`;
 const daysUntil = s => { if (!s) return null; const d = new Date(s + 'T00:00:00'); return Math.round((d - new Date(today() + 'T00:00:00')) / 86400000); };
+const I18N = {lang: 'es', dict: null, pats: [], obs: null};
+const LOC = () => I18N.lang === 'en' ? 'en-GB' : 'es-ES';
+const LANGS = {es: 'Español', en: 'English'};
+const TR_ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+const TR_SKIP = el => el && el.closest && el.closest('textarea, [contenteditable], .no-tr, script, style, #map-stage canvas');
 const VENDOR = {};
 // Las librerías pesadas (3D, Excel, cámara) se descargan solo cuando hacen falta.
 function loadVendor(src) {
@@ -291,6 +296,7 @@ function mergeSettings(s) {
   out.objTypes = (s && Array.isArray(s.objTypes)) ? clone(s.objTypes) : [];
   out.web = Object.assign({titulo:'', favicon:''}, (s && s.web) || {});
   out.avatarDefault = (s && s.avatarDefault) || '';
+  out.idioma = (s && s.idioma) || 'es';
   out.splash = Object.assign({enabled:true, show:'auto', title:'', sub:'', msg:'', anim:'rack', bg:'auto', minMs:650}, (s && s.splash) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
   out.albaran.labels = Object.assign({}, out.albaran.labels || {}); out.recogida.labels = Object.assign({}, out.recogida.labels || {});
@@ -612,6 +618,7 @@ window.addEventListener('hashchange', () => {
    ========================================================= */
 function renderApp() {
   const app = $('#app');
+  { const want = curLang(); if (want !== I18N.lang && !I18N._busy) { I18N._busy = true; setLang(want, true).finally(() => { I18N._busy = false; }); } }
   if (Store.settings) applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined);
   if (Store.initError) { hideSplash(); app.innerHTML = `<div class="empty" style="padding-top:28vh"><h3>No se puede conectar con el servidor</h3><p>${esc(Store.initError)}</p><div class="row"><button class="btn primary" data-act="reload">Reintentar</button></div></div>`; return; }
   if (!Store.settings || !Store.loaded.users || !Store.loaded.settings) {
@@ -760,7 +767,7 @@ function renderNav() {
   let h = link('inicio', 'inicio', 'home', 'Inicio') + link('inventario', 'inventario/all', 'box', 'Inventario');
   if (Auth.can('inv.view')) h += cats().map(c => {
     const n = items.filter(i => i.cat === c.id).reduce((a, i) => a + qtyOf(i), 0);
-    return `<a href="#/inventario/${esc(c.id)}" class="sub ${S.view === 'inventario' && S.cat === c.id ? 'on' : ''}">${esc(c.name)}<span class="cnt">${n.toLocaleString('es-ES')}</span></a>`;
+    return `<a href="#/inventario/${esc(c.id)}" class="sub ${S.view === 'inventario' && S.cat === c.id ? 'on' : ''}">${esc(c.name)}<span class="cnt">${n.toLocaleString(LOC())}</span></a>`;
   }).join('');
   h += link('movimientos', 'movimientos', 'swap', 'Entradas y salidas') + link('pedidos', 'pedidos', 'clipboard', 'Pedidos') + link('albaranes', 'albaranes', 'truck', 'Albaranes') + link('mapa', 'mapa', 'cube', 'Mapa 3D');
   const adm = link('registro', 'registro', 'list', 'Registro de actividad') + link('usuarios', 'usuarios', 'users', 'Usuarios') + link('ajustes', 'ajustes/' + S.stab, 'cog', 'Ajustes');
@@ -813,7 +820,7 @@ function barsHTML(map, total, max = 7) {
   const e = Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, max);
   if (!e.length) return '<p class="muted">Sin datos todavía.</p>';
   const top = Math.max(...e.map(x => x[1]));
-  return `<div class="bars">${e.map(([k, v]) => `<div class="bar-row"><span class="lab" title="${esc(k)}">${esc(k)}</span><div class="bar"><i style="width:${(v / top * 100).toFixed(1)}%"></i></div><span class="v">${v.toLocaleString('es-ES')}</span></div>`).join('')}</div>`;
+  return `<div class="bars">${e.map(([k, v]) => `<div class="bar-row"><span class="lab" title="${esc(k)}">${esc(k)}</span><div class="bar"><i style="width:${(v / top * 100).toFixed(1)}%"></i></div><span class="v">${v.toLocaleString(LOC())}</span></div>`).join('')}</div>`;
 }
 function ruleCount(r) {
   const c = catById(r.cat); if (!c) return 0;
@@ -902,7 +909,7 @@ VIEWS.inicio = () => {
   const items = Object.values(Store.items).filter(inAlm);
   const name = (Auth.user.name || Auth.user.username).split(' ')[0];
   const hour = new Date().getHours(), greet = hour < 6 ? 'Buenas noches' : hour < 14 ? 'Buenos días' : hour < 21 ? 'Buenas tardes' : 'Buenas noches';
-  const today = new Date().toLocaleDateString('es-ES', {weekday: 'long', day: 'numeric', month: 'long'});
+  const today = new Date().toLocaleDateString(LOC(), {weekday: 'long', day: 'numeric', month: 'long'});
   const almName = curAlm() ? almById(curAlm()).nombre : (almacenes().length > 1 ? 'Todos los almacenes' : '');
   const actions = `<div class="row">${Auth.can('inv.move') ? `<a class="btn" href="#/movimientos">${ico('swap')}Entrada o salida</a>` : ''}${Auth.can('inv.view') ? `<a class="btn" href="#/pedidos">${ico('clipboard')}Pedidos</a>` : ''}${Auth.can('inv.create') ? `<button class="btn primary" data-act="newItem">${ico('plus')}Dar de alta</button>` : ''}</div>`;
   const head = `<div class="dash-head"><div><h1>${greet}, ${esc(name)}</h1><p class="muted">${esc(today.charAt(0).toUpperCase() + today.slice(1))}${almName ? `, ${esc(almName)}` : ''}</p></div>${actions}</div>`;
@@ -935,19 +942,19 @@ VIEWS.inicio = () => {
     <div class="dash-hero-top"><span class="dash-live ${Store.online ? 'on' : ''}"><i></i>${Store.online ? 'En directo' : 'Reconectando…'}</span>${almName ? `<span class="dash-hero-alm">${esc(almName)}</span>` : ''}</div>
     <div class="dash-hero-body ${(Store.settings.dashboard && (Store.settings.dashboard.hidden || []).includes('iso')) ? 'no-iso' : ''}">
       <div class="dash-hero-left">
-        <div class="dash-total"><span class="dash-big num" data-count="${total}">${total.toLocaleString('es-ES')}</span><span class="dash-sub">unidades en el almacén</span></div>
+        <div class="dash-total"><span class="dash-big num" data-count="${total}">${total.toLocaleString(LOC())}</span><span class="dash-sub">unidades en el almacén</span></div>
         <div class="dash-stack">${byState.map(x => `<button style="flex:${x.n};background:${stColor(x.st)}" data-act="dashGo" data-estado="${esc(x.st === 'Sin estado' ? '' : x.st)}" title="${esc(x.st)}: ${x.n}"></button>`).join('')}</div>
-        <div class="dash-legend">${byState.map(x => `<button class="dash-leg" data-act="dashGo" data-estado="${esc(x.st === 'Sin estado' ? '' : x.st)}"><i style="background:${stColor(x.st)}"></i>${esc(x.st)}<b class="num">${x.n.toLocaleString('es-ES')}</b></button>`).join('')}</div>
+        <div class="dash-legend">${byState.map(x => `<button class="dash-leg" data-act="dashGo" data-estado="${esc(x.st === 'Sin estado' ? '' : x.st)}"><i style="background:${stColor(x.st)}"></i>${esc(x.st)}<b class="num">${x.n.toLocaleString(LOC())}</b></button>`).join('')}</div>
         ${iso.cap ? `<div class="dash-occ"><svg viewBox="0 0 44 44" class="dash-ring"><circle cx="22" cy="22" r="18" class="dash-ring-bg"/><circle cx="22" cy="22" r="18" class="dash-ring-fg" style="stroke-dasharray:${(iso.pct * 113.1).toFixed(1)} 113.1"/></svg>
           <div><b class="num"><span data-count="${Math.round(iso.pct * 100)}">${Math.round(iso.pct * 100)}</span> %</b><span class="dash-sub">de ocupación de estanterías${iso.name ? ` en ${esc(iso.name)}` : ''}</span></div></div>` : ''}
       </div>
       ${(Store.settings.dashboard && (Store.settings.dashboard.hidden || []).includes('iso')) ? '' : `<div class="dash-hero-iso">${iso.svg || '<p class="dash-sub" style="text-align:center">Dibuja las estanterías en Ajustes → Almacenes para ver aquí el almacén.</p>'}</div>`}
     </div>
     <div class="dash-kpis">
-      <button class="dash-kpi" data-act="dashGo" data-estado="${esc(E.stock[0])}"><span class="dash-sub">Disponibles</span><b class="num" data-count="${stock}">${stock.toLocaleString('es-ES')}</b><span class="dash-delta">${total ? Math.round(stock / total * 100) : 0} % del total</span></button>
-      <button class="dash-kpi" data-act="dashGo" data-estado="${esc(E.reservado)}"><span class="dash-sub">Reservadas para pedidos</span><b class="num" data-count="${reserved}">${reserved.toLocaleString('es-ES')}</b><span class="dash-delta">${plural((Store.orders || []).filter(o => o.status === 'preparacion' && almOk(o.cliente)).length, 'pedido', 'pedidos')} en preparación</span></button>
-      <a class="dash-kpi" href="#/movimientos"><span class="dash-sub">Entradas este mes</span><span class="dash-kpi-row"><b class="num" data-count="${entMes}">${entMes.toLocaleString('es-ES')}</b>${sparkSVG(spark14(entByDay), 'e')}</span>${delta(entMes, entPrev)}</a>
-      <a class="dash-kpi" href="#/albaranes"><span class="dash-sub">Salidas este mes</span><span class="dash-kpi-row"><b class="num" data-count="${salMes}">${salMes.toLocaleString('es-ES')}</b>${sparkSVG(spark14(salByDay), 's')}</span>${delta(salMes, salPrev)}</a>
+      <button class="dash-kpi" data-act="dashGo" data-estado="${esc(E.stock[0])}"><span class="dash-sub">Disponibles</span><b class="num" data-count="${stock}">${stock.toLocaleString(LOC())}</b><span class="dash-delta">${total ? Math.round(stock / total * 100) : 0} % del total</span></button>
+      <button class="dash-kpi" data-act="dashGo" data-estado="${esc(E.reservado)}"><span class="dash-sub">Reservadas para pedidos</span><b class="num" data-count="${reserved}">${reserved.toLocaleString(LOC())}</b><span class="dash-delta">${plural((Store.orders || []).filter(o => o.status === 'preparacion' && almOk(o.cliente)).length, 'pedido', 'pedidos')} en preparación</span></button>
+      <a class="dash-kpi" href="#/movimientos"><span class="dash-sub">Entradas este mes</span><span class="dash-kpi-row"><b class="num" data-count="${entMes}">${entMes.toLocaleString(LOC())}</b>${sparkSVG(spark14(entByDay), 'e')}</span>${delta(entMes, entPrev)}</a>
+      <a class="dash-kpi" href="#/albaranes"><span class="dash-sub">Salidas este mes</span><span class="dash-kpi-row"><b class="num" data-count="${salMes}">${salMes.toLocaleString(LOC())}</b>${sparkSVG(spark14(salByDay), 's')}</span>${delta(salMes, salPrev)}</a>
     </div></section>`;
 
   // ---------- Actividad ----------
@@ -972,7 +979,7 @@ VIEWS.inicio = () => {
     ['Marca', group(items, i => i.data.marca).map((x, k) => [x[0], x[1], PAL[k % PAL.length]])]
   ];
   const compo = `<section class="panel"><div class="panel-h"><div><h3>Composición del stock</h3><span class="help">Todas las unidades registradas</span></div></div><div class="panel-b dash-donuts">
-    ${donuts.map(([t, seg]) => `<div class="dash-donut"><span class="dash-donut-t">${esc(t)}</span>${donutSVG(seg)}<div class="dash-donut-leg">${seg.slice(0, 6).map(([l, n, c]) => `<span><i style="background:${c}"></i>${esc(l)}<b class="num">${n.toLocaleString('es-ES')}</b></span>`).join('')}</div></div>`).join('')}</div></section>`;
+    ${donuts.map(([t, seg]) => `<div class="dash-donut"><span class="dash-donut-t">${esc(t)}</span>${donutSVG(seg)}<div class="dash-donut-leg">${seg.slice(0, 6).map(([l, n, c]) => `<span><i style="background:${c}"></i>${esc(l)}<b class="num">${n.toLocaleString(LOC())}</b></span>`).join('')}</div></div>`).join('')}</div></section>`;
 
   // ---------- Salud del inventario ----------
   const stockItems = items.filter(i => isStock(i.data.estado));
@@ -1013,7 +1020,7 @@ VIEWS.inicio = () => {
   const team = Object.entries(users).sort((a, b) => b[1] - a[1]).slice(0, 5), uMax = Math.max(1, ...team.map(x => x[1]));
   const teamBox = `<section class="panel"><div class="panel-h"><div><h3>Equipo</h3><span class="help">Acciones registradas en 30 días</span></div></div><div class="panel-b">
     ${team.length ? team.map(([u, n]) => { const usr = Object.values(Store.users).find(x => x.username === u); const nm = usr ? usr.name || u : u; return `<div class="dash-person">${avatarHTML(usr || {name: nm}, 'avatar sm')}<span class="dash-person-n"><b>${esc(nm)}</b><span class="dash-hbar-track"><i style="width:${n / uMax * 100}%;background:var(--red)"></i></span></span><span class="num help">${n}</span></div>`; }).join('') : '<p class="muted" style="margin:0">Sin actividad en los últimos 30 días.</p>'}</div></section>`;
-  const expM = [0, 1, 2].map(k => { const a = new Date(now.getFullYear(), now.getMonth() + k, 1), b = new Date(now.getFullYear(), now.getMonth() + k + 1, 1); return {l: a.toLocaleDateString('es-ES', {month: 'long'}), n: 0, a, b}; });
+  const expM = [0, 1, 2].map(k => { const a = new Date(now.getFullYear(), now.getMonth() + k, 1), b = new Date(now.getFullYear(), now.getMonth() + k + 1, 1); return {l: a.toLocaleDateString(LOC(), {month: 'long'}), n: 0, a, b}; });
   let vencidas = 0;
   items.filter(i => !E.baja.includes(i.data.estado)).forEach(i => { const c = catById(i.cat); (c ? c.fields : []).filter(f => f.expiry && i.data[f.key]).forEach(f => { const d = new Date(i.data[f.key] + 'T00:00:00'); if (d < now) vencidas++; else expM.forEach(m => { if (d >= m.a && d < m.b) m.n++; }); }); });
   const eMax = Math.max(1, ...expM.map(m => m.n));
@@ -1026,7 +1033,7 @@ VIEWS.inicio = () => {
   const catsBox = `<section class="panel"><div class="panel-h"><h3>Stock por categoría</h3><span class="help">disponible / total</span></div><div class="panel-b dash-cats">
     ${catRows.map(x => `<a class="dash-cat" href="#/inventario/${esc(x.c.id)}"><span class="dash-cat-name"><i style="background:${esc(x.c.color)}"></i>${esc(x.c.name)}</span>
       <span class="dash-cat-bar"><i style="width:${x.t / maxCat * 100}%;background:${esc(x.c.color)};opacity:.22"></i><i style="width:${x.n / maxCat * 100}%;background:${esc(x.c.color)}"></i></span>
-      <span class="num dash-cat-n"><b>${x.n.toLocaleString('es-ES')}</b> / ${x.t.toLocaleString('es-ES')}</span></a>`).join('')}</div></section>`;
+      <span class="num dash-cat-n"><b>${x.n.toLocaleString(LOC())}</b> / ${x.t.toLocaleString(LOC())}</span></a>`).join('')}</div></section>`;
   const rules = (Store.settings.stockRules || []).filter(r => r.active !== false && r.cat && (!r.almacen || !curAlm() || r.almacen === curAlm()));
   const rulesBox = rules.length ? `<section class="panel"><div class="panel-h"><h3>Stock mínimo</h3>${Auth.can('settings.manage') ? '<a class="btn sm ghost" href="#/ajustes/avisos">Configurar</a>' : ''}</div><div class="panel-b dash-rules">
     ${rules.map(r => { const n = ruleCount(r), max = Math.max(n, r.min * 2, 1), ok = n >= r.min; return `<div class="dash-rule"><div class="row" style="justify-content:space-between"><span>${esc(r.name)}</span><span class="num"><b style="color:${ok ? 'var(--ink)' : 'var(--red-ink)'}">${n}</b> <span class="muted">/ mín. ${r.min}</span></span></div>
@@ -1038,7 +1045,7 @@ VIEWS.inicio = () => {
   const alertsBox = `<section class="panel"><div class="panel-h"><h3>Avisos</h3><span class="badge ${al.length ? 'red' : 'ok'}">${al.length || 'Todo en orden'}</span></div><div class="panel-b dash-list">
     ${al.length ? al.slice(0, 6).map(a => `<div class="dash-alert ${a.sev > 1 ? 'hi' : ''}" ${a.id ? `data-act="openItem" data-id="${a.id}"` : ''}>${ico(a.kind === 'stock' ? 'alert' : 'clock')}<span>${esc(a.text)}</span></div>`).join('') + (al.length > 6 ? `<p class="help" style="margin:6px 0 0">Y ${al.length - 6} más.</p>` : '') : '<p class="muted" style="margin:0">Sin stock bajo ni garantías o licencias a punto de vencer.</p>'}</div></section>`;
   const almBox = almacenes().length > 1 && !curAlm() ? `<section class="panel"><div class="panel-h"><h3>Por almacén</h3></div><div class="panel-b dash-list">
-    ${almacenes().map(a => { const its = items.filter(i => almOfItem(i) === a.id); return `<button class="dash-row" data-act="dashAlm" data-id="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><span class="help" style="display:block">${plural((a.clientes || []).length, 'cliente')}</span></span><span class="num" style="text-align:right"><b>${sum(its).toLocaleString('es-ES')}</b><span class="help" style="display:block">${sum(its.filter(i => isStock(i.data.estado)))} disponibles</span></span></button>`; }).join('')}</div></section>` : '';
+    ${almacenes().map(a => { const its = items.filter(i => almOfItem(i) === a.id); return `<button class="dash-row" data-act="dashAlm" data-id="${esc(a.id)}"><span><b>${esc(a.nombre)}</b><span class="help" style="display:block">${plural((a.clientes || []).length, 'cliente')}</span></span><span class="num" style="text-align:right"><b>${sum(its).toLocaleString(LOC())}</b><span class="help" style="display:block">${sum(its.filter(i => isStock(i.data.estado)))} disponibles</span></span></button>`; }).join('')}</div></section>` : '';
   const feed = Store.auditList().filter(e => !['login', 'logout', 'login_fallido', 'mfa_fallido'].includes(e.a)).slice(0, 8);
   const feedBox = `<section class="panel"><div class="panel-h"><h3>Actividad reciente</h3>${Auth.can('audit.view') ? '<a class="btn sm ghost" href="#/registro">Ver todo</a>' : ''}</div><div class="panel-b">
     ${feed.length ? `<ol class="dash-feed">${feed.map(e => `<li><span class="dash-feed-dot"></span><div><span>${esc(e.d)}</span><span class="help">${esc(ACTION_LABEL[e.a] || e.a)}, ${esc(e.u)}, ${relTime(e.t)}</span></div></li>`).join('')}</ol>` : '<p class="muted" style="margin:0">Sin actividad todavía.</p>'}</div></section>`;
@@ -1057,7 +1064,7 @@ function donutSVG(seg) {
   const tot = seg.reduce((a, x) => a + x[1], 0) || 1, R = 38, C = 2 * Math.PI * R;
   let off = 0;
   const arcs = seg.map(([l, n, c]) => { const len = n / tot * C; const el = `<circle cx="50" cy="50" r="${R}" fill="none" stroke="${c}" stroke-width="14" stroke-dasharray="${Math.max(0, len - 1.2).toFixed(2)} ${C.toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}"><title>${esc(l)}: ${n}</title></circle>`; off += len; return el; }).join('');
-  return `<svg viewBox="0 0 100 100" class="donut"><circle cx="50" cy="50" r="${R}" fill="none" stroke="var(--neutral-soft)" stroke-width="14"/><g transform="rotate(-90 50 50)">${arcs}</g><text x="50" y="49" text-anchor="middle" class="donut-n">${tot.toLocaleString('es-ES')}</text><text x="50" y="62" text-anchor="middle" class="donut-l">uds.</text></svg>`;
+  return `<svg viewBox="0 0 100 100" class="donut"><circle cx="50" cy="50" r="${R}" fill="none" stroke="var(--neutral-soft)" stroke-width="14"/><g transform="rotate(-90 50 50)">${arcs}</g><text x="50" y="49" text-anchor="middle" class="donut-n">${tot.toLocaleString(LOC())}</text><text x="50" y="62" text-anchor="middle" class="donut-l">uds.</text></svg>`;
 }
 function heatmapSVG(ent, sal) {
   const weeks = 17, cell = 13, gap = 3, top = 18, left = 26;
@@ -1069,8 +1076,8 @@ function heatmapSVG(ent, sal) {
   const lvl = v => v === 0 ? 0 : Math.min(4, Math.ceil(v / max * 4));
   let months = '', lastM = -1; heatmapSVG._lw = -9;
   const cells = days.map(d => { const w = Math.floor((d - start) / 604800000), r = (d.getDay() + 6) % 7, v = val(d);
-    if (r === 0 && d.getMonth() !== lastM && (w - (heatmapSVG._lw ?? -9)) >= 3) { lastM = d.getMonth(); heatmapSVG._lw = w; months += `<text x="${left + w * (cell + gap)}" y="11" class="dash-axis">${d.toLocaleDateString('es-ES', {month: 'short'})}</text>`; }
-    return `<rect x="${left + w * (cell + gap)}" y="${top + r * (cell + gap)}" width="${cell}" height="${cell}" rx="3" class="hm hm-${lvl(v)}"><title>${d.toLocaleDateString('es-ES', {weekday: 'short', day: 'numeric', month: 'short'})}: ${v} movimientos</title></rect>`; }).join('');
+    if (r === 0 && d.getMonth() !== lastM && (w - (heatmapSVG._lw ?? -9)) >= 3) { lastM = d.getMonth(); heatmapSVG._lw = w; months += `<text x="${left + w * (cell + gap)}" y="11" class="dash-axis">${d.toLocaleDateString(LOC(), {month: 'short'})}</text>`; }
+    return `<rect x="${left + w * (cell + gap)}" y="${top + r * (cell + gap)}" width="${cell}" height="${cell}" rx="3" class="hm hm-${lvl(v)}"><title>${d.toLocaleDateString(LOC(), {weekday: 'short', day: 'numeric', month: 'short'})}: ${v} movimientos</title></rect>`; }).join('');
   const dl = ['L', '', 'X', '', 'V', '', ''].map((t, r) => t ? `<text x="0" y="${top + r * (cell + gap) + 10}" class="dash-axis">${t}</text>` : '').join('');
   const W = left + weeks * (cell + gap), H = top + 7 * (cell + gap);
   const legend = `<div class="hm-leg"><span class="help">Menos</span>${[0, 1, 2, 3, 4].map(l => `<i class="hm-${l}"></i>`).join('')}<span class="help">Más</span></div>`;
@@ -1088,7 +1095,7 @@ function movementsSVG(series) {
   const bw = iw / series.length, b = Math.max(2, bw * 0.32);
   const y = v => pt + ih - v / nice * ih;
   const grid = [...Array(Math.round(nice / unit) + 1)].map((_, k) => k / Math.round(nice / unit)).map(f => { const v = Math.round(nice * f); return `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" class="dash-grid-line"/><text x="${pl - 6}" y="${y(v) + 3}" text-anchor="end" class="dash-axis">${v}</text>`; }).join('');
-  const bars = series.map((x, k) => { const cx = pl + bw * k + bw / 2; return `<g><title>${x.d.toLocaleDateString('es-ES', {day: 'numeric', month: 'short'})}: ${x.e} entradas, ${x.s} salidas</title>
+  const bars = series.map((x, k) => { const cx = pl + bw * k + bw / 2; return `<g><title>${x.d.toLocaleDateString(LOC(), {day: 'numeric', month: 'short'})}: ${x.e} entradas, ${x.s} salidas</title>
     <rect x="${cx - b - 1}" y="${y(x.e)}" width="${b}" height="${Math.max(0, ih + pt - y(x.e))}" rx="1.5" class="dash-bar-e"/><rect x="${cx + 1}" y="${y(x.s)}" width="${b}" height="${Math.max(0, ih + pt - y(x.s))}" rx="1.5" class="dash-bar-s"/>
     <rect x="${pl + bw * k}" y="${pt}" width="${bw}" height="${ih}" fill="transparent"/></g>`; }).join('');
   const labels = series.map((x, k) => (k % 5 === 4 || k === 0) ? `<text x="${pl + bw * k + bw / 2}" y="${H - 8}" text-anchor="middle" class="dash-axis">${x.d.getDate()}/${x.d.getMonth() + 1}</text>` : '').join('');
@@ -1191,7 +1198,7 @@ function tableAreaHTML() {
       return `<td>${fmtVal(col, it.data[col.key])}</td>`;
     }).join('')}<td class="muted">${fmtDT(it.updatedAt)}</td></tr>`).join('');
   return bulk + `<div class="tbl-wrap"><table class="tbl"><thead><tr>${canBulk ? `<th class="cb"><input type="checkbox" data-selall ${allSel ? 'checked' : ''} aria-label="Seleccionar página"></th>` : ''}${th}<th class="sort" data-sort="updatedAt">Actualizado${S.sort.k === 'updatedAt' ? (S.sort.d > 0 ? ' ▲' : ' ▼') : ''}</th></tr></thead><tbody>${body}</tbody></table></div>
-    <div class="pager"><span>${plural(rows.length, 'registro')} · ${rows.reduce((a, i) => a + qtyOf(i), 0).toLocaleString('es-ES')} unidades</span>
+    <div class="pager"><span>${plural(rows.length, 'registro')} · ${rows.reduce((a, i) => a + qtyOf(i), 0).toLocaleString(LOC())} unidades</span>
     <span class="row"><button class="btn sm" data-act="page" data-p="${S.page - 1}" ${S.page <= 1 ? 'disabled' : ''}>Anterior</button><span>Página ${S.page} de ${pages}</span><button class="btn sm" data-act="page" data-p="${S.page + 1}" ${S.page >= pages ? 'disabled' : ''}>Siguiente</button></span></div>`;
 }
 function renderTable() { const a = $('#tbl-area'); if (a) a.innerHTML = tableAreaHTML(); }
@@ -2088,6 +2095,8 @@ VIEWS.ajustes = () => {
       <label class="f">Verificación en dos pasos<select class="sel sm" data-bind="mfaRequired" id="b-mfaRequired">${[['off', 'Opcional (cada usuario decide)'], ['admins', 'Obligatoria para administradores'], ['all', 'Obligatoria para todos']].map(([v, l]) => `<option value="${v}" ${d.mfaRequired === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Recordar el equipo durante (días) ${bInp('mfaRememberDays', 'number', 'min="0" max="90"')}<span class="help">0 para pedir el código siempre.</span></label>
     </div><p class="help" style="margin-top:16px">Las contraseñas se guardan en el servidor con scrypt y una sal aleatoria por usuario; nunca en claro. La sesión usa una cookie HttpOnly y caduca tras el tiempo de inactividad indicado.</p></div></section>
+    <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Idioma de la aplicación</h3><span class="help">Cada usuario puede elegir el suyo en «Mi cuenta».</span></div></div><div class="panel-b"><div class="fgrid">
+      <label class="f">Idioma por defecto<select class="sel sm" data-bind="idioma" id="b-idioma">${Object.entries(LANGS).map(([k, l]) => `<option value="${k}" ${(d.idioma || 'es') === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="help">Los nombres que habéis escrito (clientes, categorías, estados…) se muestran tal cual.</span></label></div></div></section>
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Imagen de usuario por defecto</h3><span class="help">Se muestra para quien no haya subido la suya. Sin imagen por defecto, se ven las iniciales.</span></div></div><div class="panel-b"><div class="ava-edit">
       ${d.avatarDefault ? `<span class="avatar xl has-img"><img src="${esc(d.avatarDefault)}" alt=""></span>` : `<span class="avatar xl">${esc(initials(Auth.user.name || Auth.user.username))}</span>`}
       <div><span class="row"><label class="btn sm" style="cursor:pointer">${ico('up')}${d.avatarDefault ? 'Cambiar' : 'Subir imagen'}<input type="file" id="avadef-file" accept="image/png,image/jpeg,image/webp" class="sr"></label>${d.avatarDefault ? `<button class="btn sm ghost" data-act="avaDefDel">Usar iniciales</button>` : ''}</span><span class="help">Por ejemplo, el logotipo de la empresa o un icono neutro. Se recorta en cuadrado.</span></div></div></div></section>
@@ -3019,6 +3028,7 @@ function openAccountForm() {
   const u = Auth.user;
   const body = `<form id="af" style="display:flex;flex-direction:column;gap:14px" autocomplete="off">
     ${avatarEditorHTML(u, 'af')}
+    <label class="f">Idioma<select class="sel" id="af-lang"><option value="">El de la aplicación (${esc(LANGS[(Store.settings && Store.settings.idioma) || 'es'])})</option>${Object.entries(LANGS).map(([k, l]) => `<option value="${k}" ${u.lang === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
     <p style="margin:0">Usuario: <b>${esc(u.username)}</b></p>
     <label class="f">Nombre completo <input class="inp" name="name" value="${esc(u.name)}" required></label>
     <label class="f">Correo <input class="inp" name="email" type="email" value="${esc(u.email || '')}" placeholder="nombre@laberit.com"><span class="help">Se usa para recuperar la contraseña y avisarte si se cambia.</span></label>
@@ -3027,6 +3037,7 @@ function openAccountForm() {
   const L = openLayer(modalHTML('Mi cuenta', body, `<button class="btn" data-close>Cancelar</button><button class="btn primary" id="af-ok">Guardar</button>`, 'narrow'));
   const f = $('#af', L.el), err = $('#af-err', L.el), btn = $('#af-ok', L.el);
   loadMfaSection($('#af-mfa', L.el));
+  $('#af-lang', L.el).onchange = async e => { try { const r = await API('PUT', '/api/me/lang', {lang: e.target.value}); Auth.user = r.user; closeLayer(L); await setLang(curLang(), true); toast('Idioma cambiado.'); } catch (ex) { toast(ex.message, 'err'); } };
   bindAvatarEditor(L.el, 'af', async img => { const r = await API('PUT', '/api/me/avatar', {image: img}); Auth.user = r.user; $('#top').dataset.uid = ''; renderTop(); return r.user; });
   f.email.addEventListener('input', () => $('#af-cur', L.el).classList.toggle('hide', f.email.value.trim().toLowerCase() === String(u.email || '').toLowerCase()));
   btn.onclick = async () => {
@@ -3150,7 +3161,7 @@ function codesHTML(codes) {
     <div class="row" style="margin-top:14px"><button type="button" class="btn sm" data-act="codesDownload">${ico('down')}Descargar como archivo</button></div>`;
 }
 function downloadCodes(codes) {
-  saveFile(`codigos-recuperacion-${Auth.user.username}.txt`, `Códigos de recuperación - Almacén ${Store.settings.company}\nUsuario: ${Auth.user.username}\nGenerados: ${new Date().toLocaleString('es-ES')}\n\nCada código sirve una sola vez.\n\n${codes.join('\n')}\n`, 'text/plain');
+  saveFile(`codigos-recuperacion-${Auth.user.username}.txt`, `Códigos de recuperación - Almacén ${Store.settings.company}\nUsuario: ${Auth.user.username}\nGenerados: ${new Date().toLocaleString(LOC())}\n\nCada código sirve una sola vez.\n\n${codes.join('\n')}\n`, 'text/plain');
 }
 // Pinta el asistente de activación dentro de "root" y llama a onDone cuando termina.
 async function mfaEnrollFlow(root, onDone) {
@@ -3713,7 +3724,7 @@ function composeDeliveryMail({sede, cliente, units, title, intro, number}) {
     const A = Store.settings.albaran || {};
     const defs = (Array.isArray(A.emailTo) ? A.emailTo : String(A.emailTo || '').split(/[,;\s]+/)).map(x => x.trim().toLowerCase()).filter(Boolean);
     const known = [...new Set([...defs, ...(sede && sede.email ? [sede.email.toLowerCase()] : [])])];
-    const fill = t => String(t || '').replace(/\{(\w+)\}/g, (m, k) => ({albaran: number || '(número del albarán)', cliente: cliente || '', sede: (sede && sede.nombre) || '', fecha: new Date().toLocaleDateString('es-ES'), unidades: String(units || ''), usuario: Auth.user.name || Auth.user.username, empresa: Store.settings.company || ''})[k] ?? m);
+    const fill = t => String(t || '').replace(/\{(\w+)\}/g, (m, k) => ({albaran: number || '(número del albarán)', cliente: cliente || '', sede: (sede && sede.nombre) || '', fecha: new Date().toLocaleDateString(LOC()), unidades: String(units || ''), usuario: Auth.user.name || Auth.user.username, empresa: Store.settings.company || ''})[k] ?? m);
     let done = false;
     const L = openLayer(modalHTML(title || 'Enviar albarán por correo', `${intro ? `<p style="margin-top:0">${intro}</p>` : ''}
       <div class="f" style="margin-bottom:12px"><span style="font-size:13px;font-weight:550;color:var(--ink-2)">Destinatarios</span>
@@ -3954,7 +3965,7 @@ function dashAnimate(root) {
   root.querySelectorAll('[data-count]').forEach(el => {
     const to = Number(el.dataset.count) || 0; if (!to) return;
     const t0 = performance.now(), dur = 1100;
-    const tick = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(to * e).toLocaleString('es-ES'); if (k < 1) requestAnimationFrame(tick); };
+    const tick = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(to * e).toLocaleString(LOC()); if (k < 1) requestAnimationFrame(tick); };
     el.textContent = '0'; requestAnimationFrame(tick);
   });
 }
@@ -4299,4 +4310,54 @@ async function processFavicon(file) {
   const k = Math.min(64 / bmp.width, 64 / bmp.height), w = bmp.width * k, h = bmp.height * k;
   cv.getContext('2d').drawImage(bmp, (64 - w) / 2, (64 - h) / 2, w, h);
   return cv.toDataURL('image/png');
+}
+
+/* =========================================================
+   Idioma de la interfaz
+   El código está escrito en español; en otro idioma, un diccionario sustituye cada texto
+   justo antes de mostrarse (pantallas, ventanas, avisos y mensajes del servidor).
+   ========================================================= */
+function curLang() { const l = (Auth.user && Auth.user.lang) || (Store.settings && Store.settings.idioma) || LS.get('lbinv.lang', '') || 'es'; return LANGS[l] ? l : 'es'; }
+function i18nCompile(dict) {
+  const exact = new Map(), pats = [];
+  const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  Object.entries(dict).forEach(([k, v]) => {
+    if (!/\{[nx]\}/.test(k)) { exact.set(k, v); return; }
+    const parts = k.split(/(\{[nx]\})/), re = '^' + parts.map(p => p === '{n}' ? '(-?\\d[\\d.,:/]*)' : p === '{x}' ? '(.+?)' : esc(p)).join('') + '$';
+    let i = 0; const out = v.replace(/\{[nx]\}/g, () => '$' + (++i));
+    pats.push([new RegExp(re), out, k.length]);
+  });
+  pats.sort((a, b) => b[2] - a[2]);
+  return {exact, pats};
+}
+function trText(s) {
+  if (I18N.lang === 'es' || !I18N.dict || !s) return s;
+  const m = /^(\s*)([\s\S]*?)(\s*)$/.exec(s); const core = m[2].replace(/\s+/g, ' '); if (!core || !/[A-Za-zÀ-ÿ]/.test(core)) return s;
+  let t = I18N.dict.exact.get(core);
+  if (t === undefined) for (const [re, out] of I18N.dict.pats) { const mm = re.exec(core); if (mm) { t = out.replace(/\$(\d+)/g, (_, i) => { const g = mm[Number(i)] || ''; const e = I18N.dict.exact.get(g); return e !== undefined ? e : g; }); break; } }
+  return t === undefined ? s : m[1] + t + m[3];
+}
+function trNode(root) {
+  if (I18N.lang === 'es' || !I18N.dict || !root) return;
+  if (root.nodeType === 3) { if (!TR_SKIP(root.parentElement)) { const v = trText(root.nodeValue); if (v !== root.nodeValue) root.nodeValue = v; } return; }
+  if (root.nodeType !== 1 || (root.closest && root.closest('[contenteditable], .no-tr, script, style'))) return;
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  let n = root;
+  do {
+    if (n.nodeType === 3) { if (!TR_SKIP(n.parentElement)) { const v = trText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; } }
+    else if (!(n.closest && n.closest('[contenteditable], .no-tr'))) TR_ATTRS.forEach(a => { const v = n.getAttribute && n.getAttribute(a); if (v) { const t = trText(v); if (t !== v) n.setAttribute(a, t); } });
+  } while ((n = tw.nextNode()));
+}
+async function setLang(l, rerender = true) {
+  l = LANGS[l] ? l : 'es';
+  if (l === 'en' && !window.I18N_EN) { try { await loadVendor('i18n/en.js'); } catch { toast('No se ha podido cargar el idioma.', 'err'); return; } }
+  I18N.lang = l; I18N.dict = l === 'en' ? (I18N._en = I18N._en || i18nCompile(window.I18N_EN)) : null;
+  document.documentElement.lang = l; LS.set('lbinv.lang', l);
+  if (I18N.obs) { I18N.obs.disconnect(); I18N.obs = null; }
+  if (l !== 'es') {
+    I18N.obs = new MutationObserver(ms => { for (const m of ms) { if (m.type === 'childList') m.addedNodes.forEach(trNode); else if (m.type === 'characterData') trNode(m.target); else if (m.type === 'attributes') trNode(m.target); } });
+    I18N.obs.observe(document.body, {childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: TR_ATTRS});
+    trNode(document.body); document.title = trText(document.title);
+  }
+  if (rerender && typeof renderApp === 'function' && Store.settings) { const tp = $('#top'); if (tp) tp.dataset.uid = ''; renderApp(); }
 }
