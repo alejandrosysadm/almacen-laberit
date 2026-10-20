@@ -18,6 +18,12 @@ const newId = () => {
 };
 const plural = (n, s, p) => `${n.toLocaleString('es-ES')} ${n === 1 ? s : (p || s + 's')}`;
 const daysUntil = s => { if (!s) return null; const d = new Date(s + 'T00:00:00'); return Math.round((d - new Date(today() + 'T00:00:00')) / 86400000); };
+const VENDOR = {};
+// Las librerías pesadas (3D, Excel, cámara) se descargan solo cuando hacen falta.
+function loadVendor(src) {
+  if (!VENDOR[src]) VENDOR[src] = new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => { delete VENDOR[src]; rej(new Error('No se ha podido cargar ' + src)); }; document.head.appendChild(s); });
+  return VENDOR[src];
+}
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
@@ -571,10 +577,11 @@ window.addEventListener('hashchange', () => {
 function renderApp() {
   const app = $('#app');
   if (Store.settings) applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined);
-  if (Store.initError) { app.innerHTML = `<div class="empty" style="padding-top:28vh"><h3>No se puede conectar con el servidor</h3><p>${esc(Store.initError)}</p><div class="row"><button class="btn primary" data-act="reload">Reintentar</button></div></div>`; return; }
+  if (Store.initError) { hideSplash(); app.innerHTML = `<div class="empty" style="padding-top:28vh"><h3>No se puede conectar con el servidor</h3><p>${esc(Store.initError)}</p><div class="row"><button class="btn primary" data-act="reload">Reintentar</button></div></div>`; return; }
   if (!Store.settings || !Store.loaded.users || !Store.loaded.settings) {
-    app.innerHTML = `<div class="empty" style="padding-top:30vh"><h3>Cargando el almacén…</h3><p>Conectando con los datos compartidos.</p></div>`; return;
+    if (!$('#splash')) app.innerHTML = `<div class="empty" style="padding-top:30vh"><h3>Cargando el almacén…</h3><p>Conectando con los datos compartidos.</p></div>`; return;
   }
+  saveSplash(); hideSplash();
   if (/^#\/reset\//.test(location.hash) && !Store.needsSetup) { if (!$('#reset-form') && !$('#reset-msg')) showReset(location.hash.slice(8)); return; }
   if (Store.needsSetup) { if (!$('#setup-form')) { app.innerHTML = authHTML('setup'); bindAuth('setup'); } return; }
   if (!Auth.user && ($('#forgot-form') || $('#mfa-form'))) return;
@@ -1320,7 +1327,7 @@ async function exportCSV(el) {
   if (await saveFile(name, toCSV(exportRows(items)), 'text/csv;charset=utf-8')) Store.log('exportacion', `CSV con ${plural(items.length, 'registro')}`);
 }
 async function exportXLSX() {
-  if (!window.XLSX) { toast('No se ha podido cargar el motor de Excel. Usa la exportación CSV.', 'err'); return; }
+  if (!window.XLSX) { try { toast('Preparando el Excel…', 'info'); await loadVendor('vendor/xlsx.full.min.js'); } catch { toast('No se ha podido cargar el motor de Excel. Usa la exportación CSV.', 'err'); return; } }
   const wb = XLSX.utils.book_new(); const all = Object.values(Store.items);
   const resumen = cats().map(c => {
     const ci = all.filter(i => i.cat === c.id); const r = {'Categoría': c.name, 'Total unidades': ci.reduce((a, i) => a + qtyOf(i), 0)};
@@ -1624,7 +1631,12 @@ const Map3D = {
   mounted:false,
   mount(el) {
     this.unmount();
-    if (!window.THREE) { el.insertAdjacentHTML('beforeend', '<div class="empty">No se ha podido cargar el motor 3D. Comprueba la conexión.</div>'); return; }
+    if (!window.THREE) {
+      el.insertAdjacentHTML('beforeend', '<div class="empty map-loading"><div class="sp-bar"><i></i></div><p>Cargando el mapa 3D…</p></div>');
+      loadVendor('vendor/three.min.js').then(() => { const l = el.querySelector('.map-loading'); if (l) l.remove(); if (S.view === 'mapa' && document.body.contains(el)) { Map3D.mount(el); renderMapSide(); } })
+        .catch(() => { const l = el.querySelector('.map-loading'); if (l) l.innerHTML = 'No se ha podido cargar el motor 3D. Comprueba la conexión.'; });
+      return;
+    }
     let r;
     try { r = new THREE.WebGLRenderer({antialias:true}); } catch { el.insertAdjacentHTML('beforeend', '<div class="empty">Este dispositivo no admite gráficos 3D (WebGL).</div>'); return; }
     this.el = el; this.renderer = r;
@@ -2844,8 +2856,10 @@ function beep(ok = true) {
 }
 const Scanner = {
   inst: null, L: null,
-  supported() { return window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.Html5Qrcode; },
-  open({multi = false, title = 'Escanear código', onCode}) {
+  supported() { return window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia; },
+  open(opts) {
+    if (this.supported() && !window.Html5Qrcode) { loadVendor('vendor/html5-qrcode.min.js').then(() => this.open(opts)).catch(() => toast('No se ha podido cargar el lector de la cámara.', 'err')); return; }
+    const {multi = false, title = 'Escanear código', onCode} = opts;
     if (!this.supported()) {
       openLayer(modalHTML('Cámara no disponible', `<p style="margin-top:0">${!window.isSecureContext
         ? 'El navegador solo permite usar la cámara en páginas seguras (<b>https://</b>). Ahora mismo la aplicación se abre por <b>http://</b>.</p><p>Pide que configuren HTTPS en el servidor (instrucciones en el README, apartado HTTPS). Mientras tanto puedes seguir usando un lector USB o Bluetooth.'
@@ -4004,4 +4018,23 @@ function openEraseForm(ids) {
       closeLayer(L); toast(`Borrado registrado en ${plural(r.count, 'equipo')}.`);
     } catch (ex) { const e = $('#er-err', L.el); e.textContent = ex.message; e.classList.remove('hide'); }
   };
+}
+
+/* ---------- Pantalla de carga ---------- */
+const SPLASH_T0 = performance.now();
+function hideSplash() {
+  const sp = document.getElementById('splash'); if (!sp || sp.dataset.leaving) return;
+  sp.dataset.leaving = '1';
+  const wait = Math.max(0, 650 - (performance.now() - SPLASH_T0));
+  setTimeout(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 500); }, wait);
+}
+// Guarda nombre, logotipo y color para pintar la pantalla de carga de la próxima visita al instante.
+function saveSplash() {
+  try {
+    const B = brandOf(Store.settings), color = (Store.settings.tema || {}).primario || '#C8102E';
+    const logo = B.mode === 'image' && B.logo && B.logo.length < 400000 ? B.logo : '';
+    const v = {company: B.company || Store.settings.company || '', sub: B.subtitle || 'Control de almacén', color, logo, bg: B.bg};
+    const old = LS.get('lbinv.splash', null);
+    if (JSON.stringify(old) !== JSON.stringify(v)) LS.set('lbinv.splash', v);
+  } catch {}
 }

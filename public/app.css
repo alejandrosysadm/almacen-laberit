@@ -680,3 +680,13 @@ span.dash-leg{cursor:default}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:var(--neutral-soft);font-size:12.5px}
 .chip button{border:0;background:none;cursor:pointer;font-size:15px;line-height:1;color:var(--muted);padding:0 4px}
+
+/* ---------- Transición desde la pantalla de carga ---------- */
+.auth{animation:authIn .5s cubic-bezier(.2,.8,.2,1) both}
+.auth .auth-form form{animation:authIn .55s cubic-bezier(.2,.8,.2,1) .08s both}
+@keyframes authIn{from{opacity:0;transform:translateY(8px)}}
+.map-loading{display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:30%}
+.map-loading .sp-bar{width:160px;height:3px;border-radius:3px;background:var(--line);overflow:hidden}
+.map-loading .sp-bar i{display:block;width:40%;height:100%;background:var(--red);border-radius:3px;animation:spBar 1.2s ease-in-out infinite}
+@keyframes spBar{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){.auth,.auth .auth-form form{animation:none}}
