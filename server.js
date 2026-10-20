@@ -39,7 +39,7 @@ secretbox.init(CFG.dataDir);
   const cols = db.prepare('PRAGMA table_info(users)').all().map(c => c.name);
   const add = (c, def) => { if (!cols.includes(c)) db.exec(`ALTER TABLE users ADD COLUMN ${c} ${def}`); };
   add('totp_secret', 'TEXT'); add('totp_pending', 'TEXT'); add('totp_enabled', 'INTEGER NOT NULL DEFAULT 0');
-  add('totp_last', 'INTEGER NOT NULL DEFAULT 0'); add('recovery_codes', 'TEXT'); add('scope', 'TEXT');
+  add('totp_last', 'INTEGER NOT NULL DEFAULT 0'); add('recovery_codes', 'TEXT'); add('scope', 'TEXT'); add('avatar', 'TEXT');
   db.exec(`CREATE TABLE IF NOT EXISTS trusted_devices (
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, last_used INTEGER, ip TEXT, ua TEXT
@@ -149,7 +149,7 @@ function publicUser(u) {
     id: u.id, username: u.username, name: u.name || '', email: u.email || '', role: u.role,
     active: !!u.active, mustChange: !!u.must_change, failed: u.failed || 0, lockUntil: u.lock_until || null,
     lastLogin: u.last_login || null, createdAt: u.created_at || null, createdBy: u.created_by || '',
-    mfaEnabled: !!u.totp_enabled, mfaEnroll: mfaNeeded(u), scope: u.role === 'admin' || !u.scope ? { all: true } : scopeOf(u)
+    mfaEnabled: !!u.totp_enabled, mfaEnroll: mfaNeeded(u), avatar: u.avatar || '', scope: u.role === 'admin' || !u.scope ? { all: true } : scopeOf(u)
   };
 }
 const rowToItem = r => ({
@@ -526,6 +526,28 @@ api.post('/password/reset', ah(async (req, res) => {
 }));
 
 api.get('/me', requireAuth, (req, res) => res.json({ user: publicUser(req.auth.u) }));
+// Imagen del usuario: cuadrada y ligera (la ajusta el navegador antes de enviarla).
+const AVATAR_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+function cleanAvatar(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  if (typeof v !== 'string' || !AVATAR_RE.test(v) || v.length > 150000) throw httpErr(400, 'Imagen no válida o demasiado grande.');
+  return v;
+}
+api.put('/me/avatar', requireAuth, (req, res) => {
+  const u = req.auth.u, img = cleanAvatar((req.body || {}).image);
+  db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(img || null, u.id);
+  audit(u.username, 'usuario_editado', img ? 'Ha cambiado su imagen' : 'Ha quitado su imagen');
+  broadcast('users', {}, x => can(x, 'users.manage'));
+  res.json({ user: publicUser(getUser(u.id)) });
+});
+api.put('/users/:id/avatar', requireAuth, requirePerm('users.manage'), requireTotal, (req, res) => {
+  const t = getUser(req.params.id); if (!t) throw httpErr(404, 'El usuario no existe.');
+  const img = cleanAvatar((req.body || {}).image);
+  db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(img || null, t.id);
+  audit(req.auth.u.username, 'usuario_editado', `Imagen de ${t.username} ${img ? 'cambiada' : 'quitada'}`);
+  broadcast('users', {}, x => can(x, 'users.manage'));
+  res.json({ user: publicUser(getUser(t.id)) });
+});
 api.put('/me', requireAuth, ah(async (req, res) => {
   const u = req.auth.u, b = req.body || {};
   const name = String(b.name ?? u.name ?? '').trim().slice(0, 120);
@@ -680,6 +702,7 @@ function sanitizeSettings(s) {
   out.dashboard = { hidden: (Array.isArray(db0.hidden) ? db0.hidden : []).filter(k => /^[a-z]{2,20}$/.test(k)).slice(0, 40) };
   out.objTypes = (Array.isArray(out.objTypes) ? out.objTypes : []).filter(isObj).slice(0, 40).map(t => ({ key: /^[a-z0-9_]{2,30}$/.test(t.key || '') ? t.key : 'x_' + newId().slice(-8).toLowerCase(), l: s40(t.l, 40) || 'Elemento',
     w: num(t.w, 0.05, 100, 1), d: num(t.d, 0.05, 100, 1), h: num(t.h, 0, 20, 1), c: /^#[0-9a-fA-F]{6}$/.test(t.c || '') ? t.c : '#94A3B8', custom: !!t.custom }));
+  out.avatarDefault = typeof out.avatarDefault === 'string' && AVATAR_RE.test(out.avatarDefault) && out.avatarDefault.length <= 150000 ? out.avatarDefault : '';
   const wb = isObj(out.web) ? out.web : {};
   out.web = { titulo: s40(wb.titulo, 80), favicon: typeof wb.favicon === 'string' && /^data:image\/(png|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/.test(wb.favicon) && wb.favicon.length <= 300000 ? wb.favicon : '' };
   const sp = isObj(out.splash) ? out.splash : {};

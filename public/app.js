@@ -40,6 +40,27 @@ function toast(msg, kind = 'ok', ms = 3200) {
   $('#toasts').appendChild(t);
   setTimeout(() => t.remove(), ms);
 }
+// Imagen del usuario: la suya, la imagen por defecto de Ajustes o sus iniciales.
+function avatarHTML(u, cls = 'avatar') {
+  u = u || {}; const img = u.avatar || (Store.settings && Store.settings.avatarDefault) || '';
+  return img ? `<span class="${cls} has-img"><img src="${esc(img)}" alt=""></span>` : `<span class="${cls}">${esc(initials(u.name || u.username))}</span>`;
+}
+// Recorta al centro en cuadrado y reduce a 128 px.
+async function processAvatar(file) {
+  if (!/^image\//.test(file.type) || /svg/.test(file.type)) throw new Error('Elige una imagen PNG, JPG o WEBP.');
+  const bmp = await createImageBitmap(file), side = Math.min(bmp.width, bmp.height), cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  cv.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, 128, 128);
+  const png = cv.toDataURL('image/png'); return png.length < 120000 ? png : cv.toDataURL('image/jpeg', 0.88);
+}
+function avatarEditorHTML(u, prefix) {
+  return `<div class="ava-edit">${avatarHTML(u, 'avatar xl')}<div><b style="font-size:13px">Imagen</b><span class="row" style="margin-top:6px"><label class="btn sm" style="cursor:pointer">${ico('up')}Cambiar<input type="file" id="${prefix}-ava" accept="image/png,image/jpeg,image/webp" class="sr"></label>${u && u.avatar ? `<button type="button" class="btn sm ghost" id="${prefix}-ava-del">Quitar</button>` : ''}</span><span class="help">Se recorta en cuadrado. ${Store.settings && Store.settings.avatarDefault ? 'Sin imagen propia se usa la de por defecto.' : 'Sin imagen se muestran las iniciales.'}</span></div></div>`;
+}
+function bindAvatarEditor(root, prefix, save) {
+  const f = root.querySelector('#' + prefix + '-ava'), del = root.querySelector('#' + prefix + '-ava-del');
+  const paint = u => { const box = root.querySelector('.ava-edit'); if (box) { box.outerHTML = avatarEditorHTML(u, prefix); bindAvatarEditor(root, prefix, save); } };
+  if (f) f.onchange = async () => { const file = f.files[0]; if (!file) return; try { const img = await processAvatar(file); paint(await save(img)); toast('Imagen actualizada.'); } catch (ex) { toast(ex.message, 'err'); } };
+  if (del) del.onclick = async () => { try { paint(await save('')); toast('Imagen quitada.'); } catch (ex) { toast(ex.message, 'err'); } };
+}
 function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''); }
 
 const ICONS = {
@@ -269,6 +290,7 @@ function mergeSettings(s) {
   out.dashboard = {hidden: ((s && s.dashboard && s.dashboard.hidden) || []).slice()};
   out.objTypes = (s && Array.isArray(s.objTypes)) ? clone(s.objTypes) : [];
   out.web = Object.assign({titulo:'', favicon:''}, (s && s.web) || {});
+  out.avatarDefault = (s && s.avatarDefault) || '';
   out.splash = Object.assign({enabled:true, show:'auto', title:'', sub:'', msg:'', anim:'rack', bg:'auto', minMs:650}, (s && s.splash) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
   out.albaran.labels = Object.assign({}, out.albaran.labels || {}); out.recogida.labels = Object.assign({}, out.recogida.labels || {});
@@ -749,14 +771,14 @@ function renderNav() {
 function renderTop() {
   const top = $('#top'); if (!top) return;
   const sig = Auth.user.id + (Auth.role() || {}).name + JSON.stringify(almacenes().map(a => [a.id, a.nombre])) + curAlm();
-  if (top.dataset.uid === sig) return;
-  top.dataset.uid = sig;
+  if (top.dataset.uid === sig + (Auth.user.avatar || '').length + ((Store.settings || {}).avatarDefault || '').length) return;
+  top.dataset.uid = sig + (Auth.user.avatar || '').length + ((Store.settings || {}).avatarDefault || '').length;
   top.innerHTML = `<button class="btn ghost icon burger" data-act="nav" aria-label="Abrir menú">${ico('menu')}</button>
     <div class="gsearch">${ico('search')}<input id="gsearch" placeholder="Buscar por número de serie, modelo, cliente…  ( / )" autocomplete="off" aria-label="Búsqueda global"><div class="gs-res hide" id="gs-res"></div></div>${scanBtn('gsearch', false, 'Buscar un equipo').replace('class="btn icon', 'class="btn ghost icon')}
     ${almacenes().length > 1 ? `<select class="sel sm alm-sel" id="alm-sel" aria-label="Almacén"><option value="">Todos los almacenes</option>${almacenes().map(a => `<option value="${esc(a.id)}" ${curAlm() === a.id ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('')}</select>` : ''}
     <div class="top-right">
       <button class="btn ghost icon" data-act="theme" title="Cambiar tema" aria-label="Cambiar tema">${ico('moon')}</button>
-      <details class="menu"><summary class="btn ghost" style="height:42px;padding:0 6px 0 4px"><span class="avatar">${esc(initials(Auth.user.name || Auth.user.username))}</span><span class="who" style="text-align:left;line-height:1.15"><b style="display:block;font-size:13px">${esc(Auth.user.name || Auth.user.username)}</b><span class="muted" style="font-size:12px;font-weight:500">${esc((Auth.role() || {}).name || '')}</span></span></summary>
+      <details class="menu"><summary class="btn ghost" style="height:42px;padding:0 6px 0 4px">${avatarHTML(Auth.user)}<span class="who" style="text-align:left;line-height:1.15"><b style="display:block;font-size:13px">${esc(Auth.user.name || Auth.user.username)}</b><span class="muted" style="font-size:12px;font-weight:500">${esc((Auth.role() || {}).name || '')}</span></span></summary>
         <div class="pop"><button data-act="myAccount">${ico('users')}Mi cuenta y correo</button><button data-act="myPassword">${ico('key')}Cambiar mi contraseña</button><hr><button data-act="logout">${ico('logout')}Cerrar sesión</button></div></details>
     </div>`;
 }
@@ -990,7 +1012,7 @@ VIEWS.inicio = () => {
   const users = {}; Store.auditList().filter(e => now - new Date(e.t) < 30 * 86400000 && e.u !== 'sistema' && !['login', 'logout', 'login_fallido', 'mfa_fallido', 'exportacion'].includes(e.a)).forEach(e => { users[e.u] = (users[e.u] || 0) + 1; });
   const team = Object.entries(users).sort((a, b) => b[1] - a[1]).slice(0, 5), uMax = Math.max(1, ...team.map(x => x[1]));
   const teamBox = `<section class="panel"><div class="panel-h"><div><h3>Equipo</h3><span class="help">Acciones registradas en 30 días</span></div></div><div class="panel-b">
-    ${team.length ? team.map(([u, n]) => { const usr = Object.values(Store.users).find(x => x.username === u); const nm = usr ? usr.name || u : u; return `<div class="dash-person"><span class="avatar sm">${esc(initials(nm))}</span><span class="dash-person-n"><b>${esc(nm)}</b><span class="dash-hbar-track"><i style="width:${n / uMax * 100}%;background:var(--red)"></i></span></span><span class="num help">${n}</span></div>`; }).join('') : '<p class="muted" style="margin:0">Sin actividad en los últimos 30 días.</p>'}</div></section>`;
+    ${team.length ? team.map(([u, n]) => { const usr = Object.values(Store.users).find(x => x.username === u); const nm = usr ? usr.name || u : u; return `<div class="dash-person">${avatarHTML(usr || {name: nm}, 'avatar sm')}<span class="dash-person-n"><b>${esc(nm)}</b><span class="dash-hbar-track"><i style="width:${n / uMax * 100}%;background:var(--red)"></i></span></span><span class="num help">${n}</span></div>`; }).join('') : '<p class="muted" style="margin:0">Sin actividad en los últimos 30 días.</p>'}</div></section>`;
   const expM = [0, 1, 2].map(k => { const a = new Date(now.getFullYear(), now.getMonth() + k, 1), b = new Date(now.getFullYear(), now.getMonth() + k + 1, 1); return {l: a.toLocaleDateString('es-ES', {month: 'long'}), n: 0, a, b}; });
   let vencidas = 0;
   items.filter(i => !E.baja.includes(i.data.estado)).forEach(i => { const c = catById(i.cat); (c ? c.fields : []).filter(f => f.expiry && i.data[f.key]).forEach(f => { const d = new Date(i.data[f.key] + 'T00:00:00'); if (d < now) vencidas++; else expM.forEach(m => { if (d >= m.a && d < m.b) m.n++; }); }); });
@@ -2066,6 +2088,9 @@ VIEWS.ajustes = () => {
       <label class="f">Verificación en dos pasos<select class="sel sm" data-bind="mfaRequired" id="b-mfaRequired">${[['off', 'Opcional (cada usuario decide)'], ['admins', 'Obligatoria para administradores'], ['all', 'Obligatoria para todos']].map(([v, l]) => `<option value="${v}" ${d.mfaRequired === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Recordar el equipo durante (días) ${bInp('mfaRememberDays', 'number', 'min="0" max="90"')}<span class="help">0 para pedir el código siempre.</span></label>
     </div><p class="help" style="margin-top:16px">Las contraseñas se guardan en el servidor con scrypt y una sal aleatoria por usuario; nunca en claro. La sesión usa una cookie HttpOnly y caduca tras el tiempo de inactividad indicado.</p></div></section>
+    <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Imagen de usuario por defecto</h3><span class="help">Se muestra para quien no haya subido la suya. Sin imagen por defecto, se ven las iniciales.</span></div></div><div class="panel-b"><div class="ava-edit">
+      ${d.avatarDefault ? `<span class="avatar xl has-img"><img src="${esc(d.avatarDefault)}" alt=""></span>` : `<span class="avatar xl">${esc(initials(Auth.user.name || Auth.user.username))}</span>`}
+      <div><span class="row"><label class="btn sm" style="cursor:pointer">${ico('up')}${d.avatarDefault ? 'Cambiar' : 'Subir imagen'}<input type="file" id="avadef-file" accept="image/png,image/jpeg,image/webp" class="sr"></label>${d.avatarDefault ? `<button class="btn sm ghost" data-act="avaDefDel">Usar iniciales</button>` : ''}</span><span class="help">Por ejemplo, el logotipo de la empresa o un icono neutro. Se recorta en cuadrado.</span></div></div></div></section>
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Pestaña del navegador</h3><span class="help">El texto y el icono que se ven en la pestaña, en los favoritos y en la barra de tareas.</span></div></div><div class="panel-b">
       <div class="tab-prev"><span class="tab-prev-ico">${d.web.favicon ? `<img src="${esc(d.web.favicon)}" alt="">` : `<img src="favicon.svg" alt="">`}</span><span id="tab-prev-t">${esc(d.web.titulo || `Almacén ${d.company || 'Laberit'}`)}</span><span class="tab-prev-x">×</span></div>
       <div class="fgrid" style="margin-top:14px">
@@ -2413,7 +2438,7 @@ VIEWS.usuarios = () => {
   const roles = Store.settings.roles;
   return `<div class="page-head"><div><h1>Usuarios</h1><p>Cada persona con su usuario, su rol y su correo para recuperar la contraseña.${Store.mailEnabled ? '' : ' <span style="color:var(--warn)">El envío de correo no está configurado en el servidor.</span>'}</p></div><button class="btn primary" data-act="userNew">${ico('plus')}Nuevo usuario</button></div>
   <section class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Acceso</th><th>Estado</th><th>Último acceso</th><th></th></tr></thead><tbody>
-  ${us.map(u => { const locked = u.lockUntil && new Date(u.lockUntil) > new Date(); return `<tr style="cursor:default"><td><b>${esc(u.username)}</b>${u.id === Auth.user.id ? ' <span class="badge">Tú</span>' : ''}</td><td>${esc(u.name)}<div class="help">${u.email ? esc(u.email) : '<span style="color:var(--warn)">Sin correo</span>'}</div></td><td>${esc((roles[u.role] || {}).name || u.role)}</td><td>${scopeSummary(u)}</td>
+  ${us.map(u => { const locked = u.lockUntil && new Date(u.lockUntil) > new Date(); return `<tr style="cursor:default"><td style="white-space:nowrap"><span class="row" style="gap:10px;flex-wrap:nowrap;display:inline-flex;vertical-align:middle">${avatarHTML(u, 'avatar sm')}<b>${esc(u.username)}</b></span>${u.id === Auth.user.id ? ' <span class="badge">Tú</span>' : ''}</td><td>${esc(u.name)}<div class="help">${u.email ? esc(u.email) : '<span style="color:var(--warn)">Sin correo</span>'}</div></td><td>${esc((roles[u.role] || {}).name || u.role)}</td><td>${scopeSummary(u)}</td>
     <td>${!u.active ? '<span class="badge out">Desactivado</span>' : locked ? '<span class="badge red">Bloqueado</span>' : u.mustChange ? '<span class="badge warn">Debe cambiar contraseña</span>' : '<span class="badge ok">Activo</span>'}${u.mfaEnabled ? ' <span class="badge info" title="Verificación en dos pasos activada">2FA</span>' : ''}</td><td class="muted">${u.lastLogin ? fmtDT(u.lastLogin) : 'Nunca'}</td>
     <td style="text-align:right;max-width:none;overflow:visible;white-space:nowrap"><button class="btn sm" data-act="userEdit" data-id="${u.id}">${ico('edit')}Editar</button> <button class="btn sm" data-act="userPw" data-id="${u.id}">${ico('key')}Contraseña</button>${Store.mailEnabled && u.email && u.active ? ` <button class="btn sm" data-act="userSendReset" data-id="${u.id}" title="Envía al usuario un enlace para elegir contraseña">Enviar enlace</button>` : ''}${locked ? ` <button class="btn sm" data-act="userUnlock" data-id="${u.id}">Desbloquear</button>` : ''}${u.id !== Auth.user.id ? ` <button class="btn sm icon danger" data-act="userDel" data-id="${u.id}" aria-label="Eliminar">${ico('trash')}</button>` : ''}</td></tr>`; }).join('')}
   </tbody></table></div></section>`;
@@ -2422,6 +2447,7 @@ const admins = () => Object.values(Store.users).filter(u => u.role === 'admin' &
 function openUserForm(id) {
   const u = id ? Store.users[id] : null; const roles = Store.settings.roles;
   const body = `<form id="uf" class="fgrid" autocomplete="off">
+    ${u ? `<div class="wide">${avatarEditorHTML(u, 'uf')}</div>` : ''}
     <label class="f">Usuario <input class="inp" name="username" value="${esc(u ? u.username : '')}" required ${u ? '' : 'autofocus'}></label>
     <label class="f">Nombre completo <input class="inp" name="name" value="${esc(u ? u.name : '')}" required></label>
     <label class="f">Correo <input class="inp" name="email" type="email" value="${esc(u ? u.email || '' : '')}" placeholder="nombre@laberit.com"></label>
@@ -2434,6 +2460,7 @@ function openUserForm(id) {
     ${u && u.mfaEnabled ? `<div class="wide row" style="padding:10px 12px;background:var(--neutral-soft);border-radius:8px"><span><span class="badge info">2FA</span> Tiene la verificación en dos pasos activada.</span><span class="spacer"></span><button type="button" class="btn sm danger" data-act="userMfaReset" data-id="${esc(u.id)}">Quitar</button></div>` : ''}
   </form><div id="uf-err" class="err-msg hide" style="margin-top:14px"></div>`;
   const L = openLayer(modalHTML(u ? 'Editar usuario' : 'Nuevo usuario', body, `<button class="btn" data-close>Cancelar</button><button class="btn primary" id="uf-ok">${u ? 'Guardar cambios' : 'Crear usuario'}</button>`, 'narrow'));
+  if (u) bindAvatarEditor(L.el, 'uf', async img => { const r = await API('PUT', `/api/users/${encodeURIComponent(u.id)}/avatar`, {image: img}); await Store.loadUsers(); if (u.id === Auth.user.id) { Auth.user.avatar = r.user.avatar; $('#top').dataset.uid = ''; renderTop(); } return r.user; });
   const f = $('#uf', L.el), err = $('#uf-err', L.el), btn = $('#uf-ok', L.el);
   if (f.password) f.password.addEventListener('input', () => { $('#uf-meter', L.el).style.width = Math.round(Auth.strength(f.password.value) * 100) + '%'; });
   const syncInvite = () => { const inv = f.invite && f.invite.checked; $$('.pwrow', L.el).forEach(x => { if (!u) x.classList.toggle('hide', !!inv); }); if (f.password) { f.password.required = !inv; f.password2.required = !inv; } f.email.required = !!inv; };
@@ -2600,6 +2627,7 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  avaDefDel: () => { draft().avatarDefault = ''; sRerender(); },
   favDel: () => { draft().web.favicon = ''; applyWeb(draft().web); sRerender(); },
   otAdd: () => { const d = draft(); d.objTypes = d.objTypes || []; const n = d.objTypes.filter(t => t.custom).length + 1; d.objTypes.push({key: 'x_' + newId().slice(-8).toLowerCase(), l: 'Elemento ' + n, w: 1.5, d: 1.5, h: 1, c: '#64748B', custom: true}); sRerender(); },
   otDel: async el => { const d = draft(), k = el.dataset.k; const used = d.almacenes.reduce((a, A) => a + (A.layout.objects || []).filter(o => o.type === k).length, 0);
@@ -2909,6 +2937,7 @@ document.addEventListener('change', e => {
   if (t.id === 'map-heat') { S.mapHeat = t.value; Map3D.applyHeat(); renderMapSide(); return; }
   if (t.id === 'map-client') { S.mapClient = t.value; Map3D.refresh(); renderMapSide(); return; }
   if (t.id === 'sede-filter') { S.sedeFilter = t.value; sRerender(); return; }
+  if (t.id === 'avadef-file' && t.files[0]) { const f = t.files[0]; t.value = ''; processAvatar(f).then(url => { draft().avatarDefault = url; sRerender(); }).catch(ex => toast(ex.message, 'err')); return; }
   if (t.id === 'fav-file' && t.files[0]) { const f = t.files[0]; t.value = ''; processFavicon(f).then(url => { draft().web.favicon = url; applyWeb(draft().web); sRerender(); }).catch(ex => toast(ex.message, 'err')); return; }
   if (['tr-cliente', 'tr-origen', 'tr-destino'].includes(t.id)) { const T = S.tr = S.tr || {}; T.serials = ($('#tr-serials') || {}).value || ''; T[t.id.slice(3)] = t.value; if (t.id !== 'tr-destino') T.bulk = []; renderMain(); return; }
   if (t.id === 'rt-cliente') { S.rt = S.rt || {}; S.rt.cliente = t.value; const keep = $('#rt-serials').value; renderMain(); $('#rt-serials').value = keep; return; }
@@ -2964,7 +2993,7 @@ function gSearch(q) {
 (function boot() {
   const th = LS.get('lbinv.theme', null); if (th) document.documentElement.dataset.theme = th;
   Store.onChange = kinds => {
-    if (kinds.has('settings') || kinds.has('all')) { applyWeb(); applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined); if (Store.settings) saveSplash(); }
+    if (kinds.has('settings') || kinds.has('all')) { const tp = $('#top'); if (tp) tp.dataset.uid = ''; applyWeb(); applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined); if (Store.settings) saveSplash(); }
     const onAuth = $('#login-form') || $('#setup-form') || $('#force-form');
     if (!$('#shell') || onAuth || kinds.has('all')) { renderApp(); return; }
     if (kinds.has('net')) { const lv = $('.dash-live'); if (lv) { lv.classList.toggle('on', Store.online); lv.lastChild.textContent = Store.online ? 'En directo' : 'Reconectando…'; } }
@@ -2989,6 +3018,7 @@ function gSearch(q) {
 function openAccountForm() {
   const u = Auth.user;
   const body = `<form id="af" style="display:flex;flex-direction:column;gap:14px" autocomplete="off">
+    ${avatarEditorHTML(u, 'af')}
     <p style="margin:0">Usuario: <b>${esc(u.username)}</b></p>
     <label class="f">Nombre completo <input class="inp" name="name" value="${esc(u.name)}" required></label>
     <label class="f">Correo <input class="inp" name="email" type="email" value="${esc(u.email || '')}" placeholder="nombre@laberit.com"><span class="help">Se usa para recuperar la contraseña y avisarte si se cambia.</span></label>
@@ -2997,6 +3027,7 @@ function openAccountForm() {
   const L = openLayer(modalHTML('Mi cuenta', body, `<button class="btn" data-close>Cancelar</button><button class="btn primary" id="af-ok">Guardar</button>`, 'narrow'));
   const f = $('#af', L.el), err = $('#af-err', L.el), btn = $('#af-ok', L.el);
   loadMfaSection($('#af-mfa', L.el));
+  bindAvatarEditor(L.el, 'af', async img => { const r = await API('PUT', '/api/me/avatar', {image: img}); Auth.user = r.user; $('#top').dataset.uid = ''; renderTop(); return r.user; });
   f.email.addEventListener('input', () => $('#af-cur', L.el).classList.toggle('hide', f.email.value.trim().toLowerCase() === String(u.email || '').toLowerCase()));
   btn.onclick = async () => {
     err.classList.add('hide'); btn.disabled = true;
