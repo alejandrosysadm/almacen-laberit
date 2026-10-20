@@ -1,0 +1,28 @@
+# Dependencias (se instalan con npm ci)
+node_modules/
+
+# Datos, copias y registros: NUNCA al repositorio
+data/
+backups/
+logs/
+*.db
+*.db-*
+*.sqlite
+
+# Secretos y certificados: NUNCA al repositorio
+.env
+.env.*
+!.env.example
+certs/
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+secret.key
+secretos.env
+
+# Varios
+*.zip
+.DS_Store
+Thumbs.db

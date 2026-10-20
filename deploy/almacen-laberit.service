@@ -1,0 +1,28 @@
+# /etc/systemd/system/almacen-laberit.service
+# Instalación:
+#   sudo useradd --system --home /opt/almacen-laberit --shell /usr/sbin/nologin almacen
+#   sudo mkdir -p /opt/almacen-laberit/data /opt/almacen-laberit/backups
+#   sudo chown -R almacen:almacen /opt/almacen-laberit
+#   sudo cp deploy/almacen-laberit.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now almacen-laberit
+[Unit]
+Description=Almacén Laberit (inventario)
+After=network.target
+
+[Service]
+Type=simple
+User=almacen
+Group=almacen
+WorkingDirectory=/opt/almacen-laberit
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/almacen-laberit/data /opt/almacen-laberit/backups
+
+[Install]
+WantedBy=multi-user.target
