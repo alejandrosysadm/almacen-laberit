@@ -154,13 +154,15 @@ function defaultSettings() {
       modelos_switch: ['FortiSwitch 108F', 'FortiSwitch 108F-POE', 'FortiSwitch 124F', 'FortiSwitch 124F-POE', 'FortiSwitch 148F', 'FortiSwitch 148F-POE', 'FortiSwitch 224E'],
       puertos_switch: ['8', '16', '24', '48'],
       modelos_firewall: ['FortiGate 40F', 'FortiGate 60F', 'FortiGate 70F', 'FortiGate 80F', 'FortiGate 100F', 'FortiGate 200F'],
-      tipos_accesorio: ['Teclado', 'Ratón', 'Docking station', 'Cable de red', 'Cable de alimentación', 'Adaptador']
+      tipos_accesorio: ['Teclado', 'Ratón', 'Docking station', 'Cable de red', 'Cable de alimentación', 'Adaptador'],
+      metodos_borrado: ['NIST 800-88 Clear', 'NIST 800-88 Purge', 'Borrado criptográfico', 'Secure Erase del fabricante', 'Sobrescritura (3 pasadas)', 'Destrucción física del disco'],
+      herramientas_borrado: ['Blancco Drive Eraser', 'KillDisk', 'Secure Erase de la BIOS', 'nwipe', 'Destructora de discos']
     },
     listLabels: {
       paises:'Países', clientes:'Clientes', condiciones:'Condiciones', estados:'Estados', tipos_equipo:'Tipos de equipo',
       marcas_equipo:'Marcas de equipos', sistemas:'Sistemas operativos', marcas_monitor:'Marcas de monitores', pulgadas:'Tamaños de monitor',
       tipos_soporte:'Tipos de soporte', marcas_soporte:'Marcas de soportes', vesa:'Anclajes VESA', marcas_red:'Marcas de red',
-      modelos_switch:'Modelos de switch', puertos_switch:'Número de puertos', modelos_firewall:'Modelos de firewall', tipos_accesorio:'Tipos de accesorio'
+      modelos_switch:'Modelos de switch', puertos_switch:'Número de puertos', modelos_firewall:'Modelos de firewall', tipos_accesorio:'Tipos de accesorio', metodos_borrado:'Métodos de borrado de datos', herramientas_borrado:'Herramientas de borrado'
     },
     categories: [
       {id:'equipos', name:'Equipos', icon:'💻', color:'#C8102E', serialized:true, minStock:5, fields:[
@@ -248,6 +250,7 @@ function mergeSettings(s) {
   const d = defaultSettings();
   const out = Object.assign({}, d, clone(s || {}));
   out.lists = (s && s.lists) ? clone(s.lists) : d.lists;
+  Object.keys(d.lists).forEach(k => { if (!Array.isArray(out.lists[k])) out.lists[k] = clone(d.lists[k]); });
   out.listLabels = Object.assign({}, d.listLabels, (s && s.listLabels) || {});
   out.categories = (s && Array.isArray(s.categories) && s.categories.length) ? clone(s.categories) : d.categories;
   out.roles = (s && s.roles) ? clone(s.roles) : d.roles;
@@ -258,6 +261,11 @@ function mergeSettings(s) {
   out.numeracion = Object.assign({albaran:'ALB', pedido:'PED', traspaso:'TRA', retirada:'RET', certificado:'CERT', anual:true, digitos:4}, (s && s.numeracion) || {});
   out.recogida = Object.assign({titulo:'', columns:['check', 'balda', 'cat', 'desc', 'serie', 'qty'], showSummary:true, showSignature:true, groupByLocation:true}, (s && s.recogida) || {});
   out.tema = Object.assign({primario:'#C8102E'}, (s && s.tema) || {});
+  out.certificado = Object.assign({titulo:'', texto:'', firma1:'', firma2:'', pie:''}, (s && s.certificado) || {});
+  out.retirada = Object.assign({condicion:'Usado'}, (s && s.retirada) || {});
+  out.correos = {}; ['invite', 'reset', 'passwd', 'stock'].forEach(k => { out.correos[k] = Object.assign({asunto:'', texto:''}, ((s && s.correos) || {})[k] || {}); });
+  out.dashboard = {hidden: ((s && s.dashboard && s.dashboard.hidden) || []).slice()};
+  out.objTypes = (s && Array.isArray(s.objTypes)) ? clone(s.objTypes) : [];
   out.splash = Object.assign({enabled:true, show:'auto', title:'', sub:'', msg:'', anim:'rack', bg:'auto', minMs:650}, (s && s.splash) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
   out.albaran.labels = Object.assign({}, out.albaran.labels || {}); out.recogida.labels = Object.assign({}, out.recogida.labels || {});
@@ -898,7 +906,7 @@ VIEWS.inicio = () => {
   const iso = isoWarehouse(items);
   const band = `<section class="dash-hero">
     <div class="dash-hero-top"><span class="dash-live ${Store.online ? 'on' : ''}"><i></i>${Store.online ? 'En directo' : 'Reconectando…'}</span>${almName ? `<span class="dash-hero-alm">${esc(almName)}</span>` : ''}</div>
-    <div class="dash-hero-body">
+    <div class="dash-hero-body ${(Store.settings.dashboard && (Store.settings.dashboard.hidden || []).includes('iso')) ? 'no-iso' : ''}">
       <div class="dash-hero-left">
         <div class="dash-total"><span class="dash-big num" data-count="${total}">${total.toLocaleString('es-ES')}</span><span class="dash-sub">unidades en el almacén</span></div>
         <div class="dash-stack">${byState.map(x => `<button style="flex:${x.n};background:${stColor(x.st)}" data-act="dashGo" data-estado="${esc(x.st === 'Sin estado' ? '' : x.st)}" title="${esc(x.st)}: ${x.n}"></button>`).join('')}</div>
@@ -906,7 +914,7 @@ VIEWS.inicio = () => {
         ${iso.cap ? `<div class="dash-occ"><svg viewBox="0 0 44 44" class="dash-ring"><circle cx="22" cy="22" r="18" class="dash-ring-bg"/><circle cx="22" cy="22" r="18" class="dash-ring-fg" style="stroke-dasharray:${(iso.pct * 113.1).toFixed(1)} 113.1"/></svg>
           <div><b class="num"><span data-count="${Math.round(iso.pct * 100)}">${Math.round(iso.pct * 100)}</span> %</b><span class="dash-sub">de ocupación de estanterías${iso.name ? ` en ${esc(iso.name)}` : ''}</span></div></div>` : ''}
       </div>
-      <div class="dash-hero-iso">${iso.svg || '<p class="dash-sub" style="text-align:center">Dibuja las estanterías en Ajustes → Almacenes para ver aquí el almacén.</p>'}</div>
+      ${(Store.settings.dashboard && (Store.settings.dashboard.hidden || []).includes('iso')) ? '' : `<div class="dash-hero-iso">${iso.svg || '<p class="dash-sub" style="text-align:center">Dibuja las estanterías en Ajustes → Almacenes para ver aquí el almacén.</p>'}</div>`}
     </div>
     <div class="dash-kpis">
       <button class="dash-kpi" data-act="dashGo" data-estado="${esc(E.stock[0])}"><span class="dash-sub">Disponibles</span><b class="num" data-count="${stock}">${stock.toLocaleString('es-ES')}</b><span class="dash-delta">${total ? Math.round(stock / total * 100) : 0} % del total</span></button>
@@ -1008,13 +1016,15 @@ VIEWS.inicio = () => {
   const feedBox = `<section class="panel"><div class="panel-h"><h3>Actividad reciente</h3>${Auth.can('audit.view') ? '<a class="btn sm ghost" href="#/registro">Ver todo</a>' : ''}</div><div class="panel-b">
     ${feed.length ? `<ol class="dash-feed">${feed.map(e => `<li><span class="dash-feed-dot"></span><div><span>${esc(e.d)}</span><span class="help">${esc(ACTION_LABEL[e.a] || e.a)}, ${esc(e.u)}, ${relTime(e.t)}</span></div></li>`).join('')}</ol>` : '<p class="muted" style="margin:0">Sin actividad todavía.</p>'}</div></section>`;
 
-  return head + band + `
-    <h2 class="dash-h">Actividad</h2><div class="dash-r2">${chart}${heat}</div>
-    <h2 class="dash-h">Inventario</h2><div class="dash-r1">${compo}</div><div class="dash-r3">${aging}${topModels}${occBox || catsBox}</div>
-    <div class="dash-r3">${occBox ? catsBox : ''}${rulesBox}${alertsBox}</div>
-    <h2 class="dash-h">Operaciones</h2><div class="dash-r3">${ordersBox}${destBox}${teamBox}</div>
-    <div class="dash-r3">${delsBox}${expBox}${almBox || ''}</div>
-    <div class="dash-r1">${feedBox}</div>`;
+  const HID = new Set((Store.settings.dashboard || {}).hidden || []), V = (k, h) => HID.has(k) ? '' : (h || '');
+  const act = V('movimientos', chart) + V('actividad', heat);
+  const inv1 = V('antiguedad', aging) + V('modelos', topModels) + V('ocupacion', occBox), inv2 = V('categorias', catsBox) + V('minimos', rulesBox) + V('avisos', alertsBox);
+  const ops1 = V('pedidos', ordersBox) + V('destinos', destBox) + V('equipo', teamBox), ops2 = V('albaranes', delsBox) + V('garantias', expBox) + V('almacenes', almBox);
+  return head + V('hero', band) + `
+    ${act ? `<h2 class="dash-h">Actividad</h2><div class="dash-r2 ${V('movimientos', 'x') && V('actividad', 'x') ? '' : 'one'}">${act}</div>` : ''}
+    ${V('composicion', compo) || inv1 || inv2 ? `<h2 class="dash-h">Inventario</h2>${V('composicion', `<div class="dash-r1">${compo}</div>`)}<div class="dash-r3">${inv1}</div><div class="dash-r3">${inv2}</div>` : ''}
+    ${ops1 || ops2 ? `<h2 class="dash-h">Operaciones</h2><div class="dash-r3">${ops1}</div><div class="dash-r3">${ops2}</div>` : ''}
+    ${V('feed', `<div class="dash-r1">${feedBox}</div>`)}`;
 };
 function donutSVG(seg) {
   const tot = seg.reduce((a, x) => a + x[1], 0) || 1, R = 38, C = 2 * Math.PI * R;
@@ -1947,7 +1957,7 @@ function mapLocate(q) {
 /* =========================================================
    Ajustes
    ========================================================= */
-const STABS = [['general', 'General'], ['listas', 'Listas y marcas'], ['clientes', 'Clientes y albaranes'], ['avisos', 'Avisos de stock'], ['categorias', 'Categorías y campos'], ['almacen', 'Almacenes'], ['roles', 'Roles y permisos'], ['copias', 'Copias de seguridad']];
+const STABS = [['general', 'General'], ['listas', 'Listas y marcas'], ['clientes', 'Clientes y albaranes'], ['avisos', 'Avisos de stock'], ['correos', 'Correos'], ['categorias', 'Categorías y campos'], ['almacen', 'Almacenes'], ['roles', 'Roles y permisos'], ['copias', 'Copias de seguridad']];
 function draft() { if (!S.sdraft) S.sdraft = clone(Store.settings); return S.sdraft; }
 const dirty = () => S.sdraft && JSON.stringify(S.sdraft) !== JSON.stringify(Store.settings);
 function setPath(o, path, v) { const k = path.split('.'); let t = o; for (let i = 0; i < k.length - 1; i++) t = t[k[i]]; t[k[k.length - 1]] = v; }
@@ -1979,6 +1989,8 @@ VIEWS.ajustes = () => {
       <label class="f">Mensaje bajo la barra ${bInp('splash.msg', 'text', 'placeholder="Conectando con el almacén…"')}<span class="help">Opcional.</span></label>
       <label class="f">Tiempo mínimo (ms) ${bInp('splash.minMs', 'number', 'min="0" max="4000" step="50"')}<span class="help">Para que no sea un destello. 0 = sin mínimo.</span></label>
     </div></div></section>
+    <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Panel de inicio</h3><span class="help">Bloques que se muestran en Inicio, para todos los usuarios.</span></div></div><div class="panel-b"><div class="dash-blocks">
+      ${DASH_BLOCKS.map(([k, l]) => `<label class="chk"><input type="checkbox" data-act="dashBlk" data-k="${k}" ${(d.dashboard.hidden || []).includes(k) ? '' : 'checked'}>${l}</label>`).join('')}</div></div></section>
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Estados con significado</h3><span class="help">Indica qué estados de tu lista usa la aplicación para el stock, los pedidos, los envíos y las bajas. Así puedes renombrarlos sin que deje de funcionar nada.</span></div></div><div class="panel-b"><div class="fgrid">
       <div class="f"><span>Cuentan como disponibles</span><div class="est-list">${(d.lists.estados || []).map(v => `<label class="chk"><input type="checkbox" data-estlist="stock" value="${esc(v)}" ${(d.estadosSistema.stock || []).includes(v) ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div><span class="help">Stock, avisos y reservas de pedidos.</span></div>
       <label class="f">Reservado para un pedido<select class="sel sm" data-bind="estadosSistema.reservado" id="b-estadosSistema_reservado">${(d.lists.estados || []).map(v => `<option ${d.estadosSistema.reservado === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
@@ -2059,6 +2071,15 @@ VIEWS.ajustes = () => {
         <label class="f">Dígitos del número ${bInp('numeracion.digitos', 'number', 'min="3" max="8"')}</label>
         <label class="f">Año<span style="height:32px;display:flex;align-items:center">${bChk('numeracion.anual', 'Incluir el año y reiniciar cada año')}</span></label>
         <p class="help wide" id="num-prev">Ejemplo: ${esc(numPreview(d))}</p></div></div></section>
+      <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Retiradas y certificados de borrado</h3><span class="help">Los métodos y herramientas de borrado se editan en «Listas y marcas».</span></div></div><div class="panel-b"><div class="fgrid">
+        <label class="f">Condición de los equipos retirados<select class="sel sm" data-bind="retirada.condicion" id="b-retirada_condicion">${[...new Set([d.retirada.condicion, 'Usado', ...(d.lists.condiciones || [])])].filter(Boolean).map(v => `<option ${d.retirada.condicion === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select><span class="help">Con la que se dan de alta los equipos que no estaban en el inventario.</span></label>
+        <label class="f">Título del certificado ${bInp('certificado.titulo', 'text', 'placeholder="Certificado de borrado"')}</label>
+        <label class="f">Firma izquierda ${bInp('certificado.firma1', 'text', 'placeholder="Técnico responsable del borrado"')}</label>
+        <label class="f">Firma derecha ${bInp('certificado.firma2', 'text', 'placeholder="Por la empresa"')}</label>
+        <label class="f wide">Texto del certificado<textarea class="ta" rows="6" data-bind="certificado.texto" id="b-certificado_texto" placeholder="{empresa} certifica que los soportes de almacenamiento de los equipos relacionados a continuación, propiedad de {cliente}, han sido sometidos a un proceso de borrado de datos mediante {metodos}, de forma que la información que contenían no es recuperable por medios técnicos razonables, conforme a las prácticas descritas en la norma NIST SP 800-88 y en cumplimiento del artículo 32 del Reglamento (UE) 2016/679 (RGPD) sobre la seguridad del tratamiento.">${esc(d.certificado.texto || '')}</textarea>
+          <span class="help">Vacío = el texto de ejemplo. Puedes usar: {empresa}, {cliente}, {metodos}, {fecha}, {certificado}, {equipos}. Conviene que lo revise vuestro responsable de protección de datos.</span></label>
+        <label class="f wide">Nota al pie ${bInp('certificado.pie', 'text', 'placeholder="Los registros de cada borrado se conservan en el sistema de inventario."')}</label>
+      </div></div></section>
       <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Lista de recogida</h3><span class="help">El PDF que se imprime para preparar un pedido.</span></div></div><div class="panel-b">
         <label class="f" style="max-width:340px">Título del documento ${bInp('recogida.titulo', 'text', 'placeholder="Lista de recogida"')}</label>
         <div class="alb-cols" style="margin-top:14px">${albColsHTML(d.recogida, 'recogida')}</div>
@@ -2071,6 +2092,19 @@ VIEWS.ajustes = () => {
         <label class="f wide">Mensaje<textarea class="ta" rows="5" data-bind="albaran.emailBody" id="b-albaran_emailBody">${esc(A.emailBody || '')}</textarea>
           <span class="help">Puedes usar: {albaran}, {cliente}, {sede}, {fecha}, {unidades}, {transportista}, {referencia}, {pedido}, {usuario}, {empresa}. Debajo del mensaje se añade la lista de material y el PDF va adjunto.</span></label>
       </div></div></section>`;
+  }
+  if (S.stab === 'correos') {
+    const T = [
+      ['invite', 'Invitación a un usuario nuevo', 'Tu acceso al almacén de {empresa}', 'Hola {nombre},\n\nSe ha creado tu cuenta en el control de almacén de {empresa}. Tu usuario es {usuario}.\n\nElige tu contraseña con el botón de abajo. El enlace caduca en {horas} horas y solo se puede usar una vez.', '{nombre}, {usuario}, {empresa}, {horas}'],
+      ['reset', 'Recuperación de contraseña', 'Restablecer contraseña · Almacén {empresa}', 'Hola {nombre},\n\nHemos recibido una petición para restablecer la contraseña del usuario {usuario}.\n\nEl enlace caduca en {minutos} minutos y solo se puede usar una vez.', '{nombre}, {usuario}, {empresa}, {minutos}'],
+      ['passwd', 'Aviso de contraseña cambiada', 'Contraseña cambiada · Almacén {empresa}', 'Hola {nombre},\n\nLa contraseña del usuario {usuario} se ha cambiado {como} el {fecha}.\n\nSi no has sido tú, avisa cuanto antes a un administrador.', '{nombre}, {usuario}, {empresa}, {como}, {fecha}'],
+      ['stock', 'Aviso de stock bajo', 'Stock bajo: {grupo} ({cantidad}/{minimo})', 'Quedan {cantidad} unidades disponibles de {grupo} ({categoria}). El mínimo configurado es {minimo}.', '{grupo}, {cantidad}, {minimo}, {categoria}, {empresa}']
+    ];
+    body = `<p class="muted" style="margin:0 0 14px">Deja un campo vacío para usar el texto de siempre (lo ves en gris). Separa los párrafos con una línea en blanco. El botón con el enlace y la lista de material se añaden solos. El correo del albarán se configura en «Clientes y albaranes».</p>
+      ${!Store.mailEnabled ? '<div class="err-msg" style="margin-bottom:14px">El envío de correo no está configurado en el servidor: estos textos se usarán cuando lo esté.</div>' : ''}
+      ${T.map(([k, title, da, dt, vars]) => `<section class="panel" style="margin-bottom:16px"><div class="panel-h"><h3>${title}</h3></div><div class="panel-b"><div class="fgrid">
+        <label class="f wide">Asunto ${bInp(`correos.${k}.asunto`, 'text', `placeholder="${esc(da)}"`)}</label>
+        <label class="f wide">Texto<textarea class="ta" rows="6" data-bind="correos.${k}.texto" id="b-correos_${k}_texto" placeholder="${esc(dt)}">${esc(d.correos[k].texto || '')}</textarea><span class="help">Puedes usar: ${vars}.</span></label></div></div></section>`).join('')}`;
   }
   if (S.stab === 'avisos') {
     d.stockRules = d.stockRules || [];
@@ -2169,10 +2203,16 @@ VIEWS.ajustes = () => {
         ${isShaped(L) ? `<div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Vértice</th><th>X</th><th>Z</th><th></th></tr></thead><tbody>${L.shape.map((q, k) => `<tr style="cursor:default"><td>${k + 1}</td>
           <td><input class="inp sm" type="number" step="0.5" style="width:80px" data-shape="${k}" data-axis="0" value="${esc(q[0])}"></td><td><input class="inp sm" type="number" step="0.5" style="width:80px" data-shape="${k}" data-axis="1" value="${esc(q[1])}"></td>
           <td><button class="btn sm icon ghost" data-act="shapeIns" data-i="${k}" title="Añadir un vértice después">${ico('plus')}</button>${L.shape.length > 3 ? `<button class="btn sm icon ghost" data-act="shapeDel" data-i="${k}" aria-label="Quitar vértice">${ico('trash')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}</section>
+      <section class="panel"><div class="panel-h"><div><h3>Tipos de elementos</h3><span class="help">Nombre, color y medidas por defecto de cada tipo. Alto 0 = marca en el suelo (como un pasillo). Sirven para todos los almacenes.</span></div><button class="btn sm" data-act="otAdd">${ico('plus')}Tipo propio</button></div>
+        <div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Nombre</th><th>Color</th><th>Ancho</th><th>Fondo</th><th>Alto</th><th></th></tr></thead><tbody>
+        ${Object.entries(objTypes(d)).map(([k, t]) => `<tr style="cursor:default"><td><input class="inp sm" style="width:170px" data-ot="${esc(k)}" data-f="l" value="${esc(t.l)}"></td>
+          <td><input type="color" class="inp sm" style="width:52px;padding:2px" data-ot="${esc(k)}" data-f="c" value="${esc(t.c)}"></td>
+          ${['w', 'd', 'h'].map(f => `<td><input class="inp sm" type="number" min="0" step="0.1" style="width:66px" data-ot="${esc(k)}" data-f="${f}" value="${esc(t[f])}"></td>`).join('')}
+          <td>${t.custom ? `<button class="btn sm icon ghost" data-act="otDel" data-k="${esc(k)}" aria-label="Eliminar tipo">${ico('trash')}</button>` : (d.objTypes || []).some(x => x.key === k) ? `<button class="btn sm icon ghost" data-act="otReset" data-k="${esc(k)}" title="Volver a los valores de fábrica">${ico('reset')}</button>` : ''}</td></tr>`).join('')}</tbody></table></div></section>
       <section class="panel"><div class="panel-h"><div><h3>Elementos del plano</h3><span class="help">Pasillos, pilares, tabiques, oficinas, mesas, puestos de embalaje, extintores y salidas de emergencia.</span></div>
-        <div class="row"><select class="sel sm" id="obj-type" style="width:auto">${Object.entries(OBJ_TYPES).map(([k, t]) => `<option value="${k}">${t.l}</option>`).join('')}</select><button class="btn sm primary" data-act="objAdd">${ico('plus')}Añadir</button></div></div>
+        <div class="row"><select class="sel sm" id="obj-type" style="width:auto">${Object.entries(objTypes(d)).map(([k, t]) => `<option value="${k}">${esc(t.l)}</option>`).join('')}</select><button class="btn sm primary" data-act="objAdd">${ico('plus')}Añadir</button></div></div>
         ${(L.objects || []).length ? `<div class="tbl-wrap"><table class="tbl ftable"><thead><tr><th>Tipo</th><th>Nombre</th><th>X</th><th>Z</th><th>Ancho</th><th>Fondo</th><th>Giro</th><th></th></tr></thead><tbody>
-        ${L.objects.map((o, i) => !editPlanta(o) ? '' : `<tr style="cursor:default"><td><span class="row" style="gap:6px;flex-wrap:nowrap"><i class="cdot" style="--c:${(OBJ_TYPES[o.type] || OBJ_TYPES.pilar).c}"></i>${esc((OBJ_TYPES[o.type] || OBJ_TYPES.pilar).l)}</span></td>
+        ${L.objects.map((o, i) => !editPlanta(o) ? '' : `<tr style="cursor:default"><td><span class="row" style="gap:6px;flex-wrap:nowrap"><i class="cdot" style="--c:${(objTypes(d)[o.type] || objTypes(d).pilar).c}"></i>${esc((objTypes(d)[o.type] || objTypes(d).pilar).l)}</span></td>
           <td>${bInp(`${LP}.objects.${i}.name`, 'text', `style="width:130px" placeholder="${o.type === 'pasillo' ? 'Pasillo 1' : 'Opcional'}"`)}</td>
           <td>${bInp(`${LP}.objects.${i}.x`, 'number', 'style="width:64px" step="0.5"')}</td><td>${bInp(`${LP}.objects.${i}.z`, 'number', 'style="width:64px" step="0.5"')}</td>
           <td>${bInp(`${LP}.objects.${i}.w`, 'number', 'style="width:60px" min="0.1" step="0.1"')}</td><td>${bInp(`${LP}.objects.${i}.d`, 'number', 'style="width:60px" min="0.1" step="0.1"')}</td>
@@ -2207,7 +2247,7 @@ function drawLayoutPreview() {
   const sc = 22;
   const rk = L.racks.filter(editPlanta).map(r => { const len = Number(r.len) || 4, rot = Number(r.rot) === 90, up = Number(r.elev) > 0; const w = rot ? 1.1 : len, d = rot ? len : 1.1; return `<g ${up ? `class="rack-up"` : ''}>${up ? `<title>A ${String(r.elev).replace('.', ',')} m del suelo</title>` : ''}<rect x="${(Number(r.x) + W / 2 - w / 2) * sc}" y="${(Number(r.z) + D / 2 - d / 2) * sc}" width="${w * sc}" height="${d * sc}" fill="var(--red)" rx="2"/><text x="${(Number(r.x) + W / 2) * sc}" y="${(Number(r.z) + D / 2) * sc + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${esc(r.name)}</text></g>`; }).join('');
   const zs = L.zones.filter(editPlanta).map(z => `<g><rect x="${(Number(z.x) + W / 2 - z.w / 2) * sc}" y="${(Number(z.z) + D / 2 - z.d / 2) * sc}" width="${z.w * sc}" height="${z.d * sc}" fill="${esc(z.color)}" fill-opacity=".15" stroke="${esc(z.color)}" stroke-dasharray="4 3"/><text x="${(Number(z.x) + W / 2) * sc}" y="${(Number(z.z) + D / 2) * sc + 4}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink)">${esc(z.name)}</text></g>`).join('');
-  box.innerHTML = `<div class="tbl-wrap"><svg class="layout-prev" viewBox="-4 -4 ${W * sc + 8} ${D * sc + 8}" style="width:100%;max-height:360px;min-width:480px"><rect x="0" y="0" width="${W * sc}" height="${D * sc}" fill="${isShaped(L) ? 'var(--neutral-soft)' : 'var(--floor)'}" stroke="${isShaped(L) ? 'none' : 'var(--line-strong)'}" stroke-width="2" ${isShaped(L) ? 'opacity=".5"' : ''}/>${isShaped(L) ? `<polygon points="${floorPoly(L).map(p => `${(p[0] + W / 2) * sc},${(p[1] + D / 2) * sc}`).join(' ')}" fill="var(--floor)" stroke="var(--line-strong)" stroke-width="2"/>` : ''}${L.plan && L.plan.image ? `<image href="${L.plan.image}" x="0" y="0" width="${W * sc}" height="${D * sc}" preserveAspectRatio="none" opacity="${L.plan.opacity ?? 0.6}"/>` : ''}${(L.plantas || []).map(pl => { const on = S.plantaSel === pl.id; return `<rect x="${(Number(pl.x) - pl.w / 2 + W / 2) * sc}" y="${(Number(pl.z) - pl.d / 2 + D / 2) * sc}" width="${pl.w * sc}" height="${pl.d * sc}" fill="var(--paper)" fill-opacity="${on ? 0.85 : 0}" stroke="var(--ink-2)" stroke-width="${on ? 2 : 1}" stroke-dasharray="${on ? '' : '4 3'}"/><text x="${(Number(pl.x) - pl.w / 2 + W / 2) * sc + 4}" y="${(Number(pl.z) - pl.d / 2 + D / 2) * sc + 12}" font-size="10" font-weight="700" fill="var(--ink-2)">${esc(pl.nombre)}</text>`; }).join('')}${(L.objects || []).filter(editPlanta).map(o => { const g = objGeom(o), X = v => (v + W / 2) * sc, Z = v => (v + D / 2) * sc;
+  box.innerHTML = `<div class="tbl-wrap"><svg class="layout-prev" viewBox="-4 -4 ${W * sc + 8} ${D * sc + 8}" style="width:100%;max-height:360px;min-width:480px"><rect x="0" y="0" width="${W * sc}" height="${D * sc}" fill="${isShaped(L) ? 'var(--neutral-soft)' : 'var(--floor)'}" stroke="${isShaped(L) ? 'none' : 'var(--line-strong)'}" stroke-width="2" ${isShaped(L) ? 'opacity=".5"' : ''}/>${isShaped(L) ? `<polygon points="${floorPoly(L).map(p => `${(p[0] + W / 2) * sc},${(p[1] + D / 2) * sc}`).join(' ')}" fill="var(--floor)" stroke="var(--line-strong)" stroke-width="2"/>` : ''}${L.plan && L.plan.image ? `<image href="${L.plan.image}" x="0" y="0" width="${W * sc}" height="${D * sc}" preserveAspectRatio="none" opacity="${L.plan.opacity ?? 0.6}"/>` : ''}${(L.plantas || []).map(pl => { const on = S.plantaSel === pl.id; return `<rect x="${(Number(pl.x) - pl.w / 2 + W / 2) * sc}" y="${(Number(pl.z) - pl.d / 2 + D / 2) * sc}" width="${pl.w * sc}" height="${pl.d * sc}" fill="var(--paper)" fill-opacity="${on ? 0.85 : 0}" stroke="var(--ink-2)" stroke-width="${on ? 2 : 1}" stroke-dasharray="${on ? '' : '4 3'}"/><text x="${(Number(pl.x) - pl.w / 2 + W / 2) * sc + 4}" y="${(Number(pl.z) - pl.d / 2 + D / 2) * sc + 12}" font-size="10" font-weight="700" fill="var(--ink-2)">${esc(pl.nombre)}</text>`; }).join('')}${(L.objects || []).filter(editPlanta).map(o => { const g = objGeom(o, draft()), X = v => (v + W / 2) * sc, Z = v => (v + D / 2) * sc;
     return `<g><title>${esc(g.T.l)}${o.name ? ': ' + esc(o.name) : ''}</title><rect x="${X(g.x0)}" y="${Z(g.z0)}" width="${g.w * sc}" height="${g.d * sc}" fill="${g.T.c}" fill-opacity="${o.type === 'pasillo' ? 0.12 : 0.55}" stroke="${g.T.c}" ${o.type === 'pasillo' || o.type === 'salida' ? 'stroke-dasharray="5 3"' : ''} rx="${o.type === 'extintor' ? 6 : 1}"/>${g.label ? `<text x="${X(g.x)}" y="${Z(g.z) + 4}" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ink-2)">${esc(g.label)}</text>` : ''}</g>`; }).join('')}${zs}${rk}${doorGeom(L).map(g => { const [ax, az] = g.A, [bx, bz] = g.B; const X = v => (v + W / 2) * sc, Z = v => (v + D / 2) * sc;
     const lx = X(g.C[0] + g.n[0] * 1.3), lz = Z(g.C[1] + g.n[1] * 1.3) + 4;
     return `<g><line x1="${X(ax)}" y1="${Z(az)}" x2="${X(bx)}" y2="${Z(bz)}" stroke="var(--paper)" stroke-width="7"/><line x1="${X(ax)}" y1="${Z(az)}" x2="${X(bx)}" y2="${Z(bz)}" stroke="var(--red)" stroke-width="4" stroke-dasharray="6 3"/>
@@ -2228,7 +2268,7 @@ async function saveSettings() {
     a.layout.racks.forEach(r => { ['x', 'z', 'rot', 'len', 'levels', 'elev', 'huecos'].forEach(k => r[k] = Number(r[k]) || 0); r.huecos = Math.min(50, Math.max(0, Math.round(r.huecos))); r.elev = Math.min(10, Math.max(0, r.elev)); r.len = Math.max(1, r.len); r.levels = Math.min(10, Math.max(1, r.levels)); });
     a.layout.zones.forEach(z => { ['x', 'z', 'w', 'd'].forEach(k => z[k] = Number(z[k]) || 0); z.w = Math.max(1, z.w); z.d = Math.max(1, z.d); });
     (a.layout.doors || []).forEach(d => { d.pos = Number(d.pos) || 0; d.width = Math.max(0.5, Number(d.width) || 2); });
-    (a.layout.objects || []).forEach(o => { ['x', 'z', 'w', 'd', 'rot'].forEach(k => o[k] = Number(o[k]) || 0); const T = OBJ_TYPES[o.type] || OBJ_TYPES.pilar; o.w = o.w > 0 ? o.w : T.w; o.d = o.d > 0 ? o.d : T.d; });
+    (a.layout.objects || []).forEach(o => { ['x', 'z', 'w', 'd', 'rot'].forEach(k => o[k] = Number(o[k]) || 0); const T = objTypes(d)[o.type] || objTypes(d).pilar; o.w = o.w > 0 ? o.w : T.w; o.d = o.d > 0 ? o.d : T.d; });
     if (!String(a.nombre || '').trim()) a.nombre = 'Almacén';
   });
   d.layout = d.almacenes[0].layout;
@@ -2445,6 +2485,12 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  otAdd: () => { const d = draft(); d.objTypes = d.objTypes || []; const n = d.objTypes.filter(t => t.custom).length + 1; d.objTypes.push({key: 'x_' + newId().slice(-8).toLowerCase(), l: 'Elemento ' + n, w: 1.5, d: 1.5, h: 1, c: '#64748B', custom: true}); sRerender(); },
+  otDel: async el => { const d = draft(), k = el.dataset.k; const used = d.almacenes.reduce((a, A) => a + (A.layout.objects || []).filter(o => o.type === k).length, 0);
+    if (used && !await confirmDlg('Eliminar tipo', `Hay ${plural(used, 'elemento')} de este tipo en los planos. Se mostrarán como pilares.`, 'Eliminar')) return;
+    d.objTypes = (d.objTypes || []).filter(t => t.key !== k); sRerender(); },
+  otReset: el => { const d = draft(); d.objTypes = (d.objTypes || []).filter(t => t.key !== el.dataset.k); sRerender(); },
+  dashBlk: el => { const d = draft(); const h = new Set(d.dashboard.hidden || []); if (el.checked) h.delete(el.dataset.k); else h.add(el.dataset.k); d.dashboard.hidden = [...h]; const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   splashPreview: () => previewSplash(),
   eraseOpen: () => openEraseForm([...S.sel]),
   certMake: async () => {
@@ -2650,7 +2696,7 @@ const ACT = {
   rackAdd: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; let n = L.racks.length + 1; const id = 'R' + newId().slice(-8); L.racks.push({id, name:'R' + n, x:0, z:3, rot:0, len:4, levels:4, planta: S.plantaSel || ''}); sRerender(); },
   rackDel: async el => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; const r = L.racks[Number(el.dataset.i)]; const n = Object.values(Store.items).filter(i => i.data.ubicacion === r.id).length; if (n && !await confirmDlg('Eliminar estantería', `La estantería ${esc(r.name)} tiene ${plural(n, 'registro')}. Quedarán sin ubicación en el mapa.`, 'Eliminar')) return; L.racks.splice(Number(el.dataset.i), 1); sRerender(); },
   zoneAdd: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; let n = L.zones.length + 1; const id = 'Z' + newId().slice(-8); L.zones.push({id, name:'Zona ' + n, x:0, z:0, w:5, d:4, color:'#475569', planta: S.plantaSel || ''}); sRerender(); },
-  objAdd: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; const t = ($('#obj-type') || {}).value || 'pilar', T = OBJ_TYPES[t]; L.objects = L.objects || []; const n = L.objects.filter(o => o.type === t).length + 1; const pl = plantaOf(L, S.plantaSel); L.objects.push({id: 'O' + newId().slice(-8), type: t, name: t === 'pasillo' ? 'Pasillo ' + n : '', x: pl ? Number(pl.x) || 0 : 0, z: pl ? Number(pl.z) || 0 : 0, w: T.w, d: T.d, rot: 0, planta: S.plantaSel || ''}); sRerender(); },
+  objAdd: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; const t = ($('#obj-type') || {}).value || 'pilar', T = objTypes(draft())[t]; L.objects = L.objects || []; const n = L.objects.filter(o => o.type === t).length + 1; const pl = plantaOf(L, S.plantaSel); L.objects.push({id: 'O' + newId().slice(-8), type: t, name: t === 'pasillo' ? 'Pasillo ' + n : '', x: pl ? Number(pl.x) || 0 : 0, z: pl ? Number(pl.z) || 0 : 0, w: T.w, d: T.d, rot: 0, planta: S.plantaSel || ''}); sRerender(); },
   objDel: el => { (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout.objects.splice(Number(el.dataset.i), 1); sRerender(); },
   planDel: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; delete L.plan; sRerender(); },
   planFit: () => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; L.depth = Math.round(Number(L.width) / L.plan.ratio * 10) / 10; sRerender(); },
@@ -2723,6 +2769,9 @@ document.addEventListener('input', e => {
   if (t.id === 'au-q') { S.auditQ = t.value; $('#audit-area').innerHTML = auditTableHTML(); return; }
   if (t.id === 'mv-serials') { mvCountUpdate(); return; }
   if (t.id === 'mv-out') { mvOutUpdate(); return; }
+  if (t.dataset.ot) { const d = draft(); d.objTypes = d.objTypes || []; const k = t.dataset.ot; let e = d.objTypes.find(x => x.key === k);
+    if (!e) { const b = objTypes(d)[k]; e = {key: k, l: b.l, w: b.w, d: b.d, h: b.h, c: b.c}; d.objTypes.push(e); }
+    e[t.dataset.f] = t.dataset.f === 'l' || t.dataset.f === 'c' ? t.value : Number(t.value) || 0; drawLayoutPreview(); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
   if (t.id === 'tr-serials') { S.tr = S.tr || {}; S.tr.serials = t.value; return; }
   if (t.dataset.shape !== undefined) { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; L.shape[Number(t.dataset.shape)][Number(t.dataset.axis)] = Number(t.value) || 0; L.shapeKind = 'custom'; drawLayoutPreview(); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
   if (t.id === 'plan-op') { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; if (L.plan) L.plan.opacity = Number(t.value) / 100; const v = $('#plan-op-val'); if (v) v.textContent = t.value + ' %'; drawLayoutPreview(); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); return; }
@@ -3814,7 +3863,7 @@ function shapePreset(kind, W, D) {
 /* =========================================================
    Plano de fondo y elementos fijos del almacén
    ========================================================= */
-const OBJ_TYPES = {
+const OBJ_BASE = {
   pasillo: {l: 'Pasillo', w: 2, d: 12, h: 0, c: '#94A3B8'},
   pilar: {l: 'Pilar', w: 0.5, d: 0.5, h: 3.2, c: '#9CA3AF'},
   pared: {l: 'Tabique', w: 6, d: 0.15, h: 2.6, c: '#CBD5E1'},
@@ -3824,11 +3873,18 @@ const OBJ_TYPES = {
   extintor: {l: 'Extintor', w: 0.35, d: 0.35, h: 0.7, c: '#DC2626'},
   salida: {l: 'Salida de emergencia', w: 1.6, d: 0.6, h: 0, c: '#16A34A'}
 };
-function objGeom(o) {
-  const T = OBJ_TYPES[o.type] || OBJ_TYPES.pilar, rot = Number(o.rot) === 90;
+// Tipos de elementos: los de fábrica, con los cambios y los tipos propios de Ajustes → Almacenes.
+function objTypes(st) {
+  st = st || Store.settings || {};
+  const out = {}; Object.entries(OBJ_BASE).forEach(([k, t]) => { out[k] = {...t}; });
+  (st.objTypes || []).forEach(t => { out[t.key] = Object.assign(out[t.key] || {custom: true}, {l: t.l, w: Number(t.w), d: Number(t.d), h: Number(t.h), c: t.c}, t.custom ? {custom: true} : {}); });
+  return out;
+}
+function objGeom(o, st) {
+  const TT = objTypes(st), T = TT[o.type] || TT.pilar, rot = Number(o.rot) === 90;
   const w0 = Number(o.w) || T.w, d0 = Number(o.d) || T.d, w = rot ? d0 : w0, d = rot ? w0 : d0;
   const x = Number(o.x) || 0, z = Number(o.z) || 0;
-  return {T, x, z, w, d, h: T.h, x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, label: o.name || (['oficina', 'mesa', 'embalaje', 'salida'].includes(o.type) ? T.l : '')};
+  return {T, x, z, w, d, h: T.h, x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2, label: o.name || (['oficina', 'mesa', 'embalaje', 'salida'].includes(o.type) || T.custom ? T.l : '')};
 }
 // Convierte una foto o la primera página de un PDF en una imagen ligera para el suelo del mapa.
 async function processPlan(file) {
@@ -4015,8 +4071,8 @@ function docDone(d, title, text) {
 function openEraseForm(ids) {
   const items = ids.map(id => Store.items[id]).filter(Boolean);
   const L = openLayer(modalHTML(`Registrar borrado de datos (${plural(items.length, 'equipo')})`, `<div class="fgrid">
-    <label class="f">Método<select class="sel" id="er-metodo">${ERASE_METHODS.map(m => `<option>${m}</option>`).join('')}</select></label>
-    <label class="f">Herramienta o software<input class="inp" id="er-herr" placeholder="Blancco, KillDisk, BIOS Secure Erase…"></label>
+    <label class="f">Método<select class="sel" id="er-metodo">${(listOf('metodos_borrado').length ? listOf('metodos_borrado') : ERASE_METHODS).map(m => `<option>${esc(m)}</option>`).join('')}</select></label>
+    <label class="f">Herramienta o software<input class="inp" id="er-herr" list="dl-herr" placeholder="Elige o escribe"><datalist id="dl-herr">${listOf('herramientas_borrado').map(h => `<option value="${esc(h)}">`).join('')}</datalist></label>
     <label class="f">Fecha<input class="inp" type="date" id="er-fecha" value="${new Date().toISOString().slice(0, 10)}"></label>
     <label class="f">Técnico<input class="inp" id="er-tec" value="${esc(Auth.user.name || Auth.user.username)}"></label>
     <label class="f">Resultado<select class="sel" id="er-res"><option>Correcto</option><option>Fallido</option></select></label>
@@ -4070,3 +4126,5 @@ function previewSplash() {
   const close = () => { sp.classList.add('out'); setTimeout(() => el.remove(), 450); };
   sp.addEventListener('click', close); setTimeout(close, 4000);
 }
+
+const DASH_BLOCKS = [['hero', 'Centro de control (banda superior)'], ['iso', 'Dibujo del almacén en la banda'], ['movimientos', 'Movimientos'], ['actividad', 'Actividad diaria (mapa de calor)'], ['composicion', 'Composición del stock'], ['antiguedad', 'Antigüedad del stock'], ['modelos', 'Modelos disponibles'], ['ocupacion', 'Ocupación por estantería'], ['categorias', 'Stock por categoría'], ['minimos', 'Stock mínimo'], ['avisos', 'Avisos'], ['pedidos', 'Pedidos'], ['destinos', 'Destinos principales'], ['equipo', 'Equipo'], ['albaranes', 'Últimos albaranes'], ['garantias', 'Garantías y licencias'], ['almacenes', 'Por almacén'], ['feed', 'Actividad reciente']];

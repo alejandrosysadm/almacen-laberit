@@ -693,3 +693,7 @@ span.dash-leg{cursor:default}
 
 #splash-prev #splash{cursor:pointer}
 #splash-prev .prev-tag{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:600;color:var(--sp-mut);border:1px solid var(--sp-line);padding:4px 10px;border-radius:999px}
+
+.dash-blocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 18px}
+.dash-r2.one{grid-template-columns:1fr}
+.dash-hero-body.no-iso{grid-template-columns:1fr}

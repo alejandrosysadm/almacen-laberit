@@ -149,6 +149,13 @@ Un cliente puede asignarse a varios almacenes (Ajustes → Almacenes) y cada equ
 - **Borrado de datos:** seleccionando equipos en el inventario → «Registrar borrado», con método (NIST 800-88 Clear o Purge, borrado criptográfico, Secure Erase, sobrescritura, destrucción física), herramienta, fecha, técnico y resultado. Queda en la ficha y en el historial de cada equipo.
 - **Certificado de borrado:** seleccionando equipos con borrado registrado → «Certificado de borrado». Genera un PDF (prefijo CERT) con los equipos, el método de cada uno, la declaración conforme a NIST SP 800-88 y al artículo 32 del RGPD, y los recuadros de firma.
 
+## Más ajustes
+
+- **Retiradas y certificados** (Ajustes → Clientes y albaranes): condición de los equipos retirados, título, texto (con {empresa}, {cliente}, {metodos}, {fecha}, {certificado}, {equipos}), rótulos de firma y pie del certificado. Los métodos y herramientas de borrado son listas en «Listas y marcas».
+- **Correos** (Ajustes → Correos): asunto y texto de la invitación, la recuperación de contraseña, el aviso de contraseña cambiada y el aviso de stock bajo, con sus variables. Vacío = texto de siempre.
+- **Panel de inicio** (Ajustes → General): mostrar u ocultar cada bloque, incluido el dibujo del almacén.
+- **Tipos de elementos del plano** (Ajustes → Almacenes): nombre, color y medidas de cada tipo, y tipos propios.
+
 ## Huecos y etiquetas de ubicación
 
 - **Huecos:** en Ajustes → Almacenes, la columna «Huecos» indica cuántos huecos tiene cada balda de una estantería. La ubicación de un equipo pasa a ser exacta, como `B2-3-4` (estantería, balda, hueco), y se ve en la ficha, la lista de recogida, la ruta y el mapa 3D.

@@ -310,31 +310,32 @@ function findToken(token) {
   if (!u || !u.active) return null;
   return { t, u };
 }
+// Textos de los correos: los de Ajustes → Correos o, si están vacíos, los de siempre. Admiten {variables}.
+function mailText(kind, vars, defAsunto, defTexto) {
+  const c = ((settings().correos || {})[kind]) || {};
+  const fill = t => String(t || '').replace(/\{(\w+)\}/g, (m, k) => vars[k] !== undefined ? vars[k] : m);
+  const asunto = fill(c.asunto || defAsunto);
+  const paras = fill(c.texto || defTexto).split(/\n{2,}/).map(p => mail.esc(p.trim()).replace(/\n/g, '<br>')).filter(Boolean);
+  return { asunto, paras };
+}
 async function sendPasswordLink(u, kind, ip) {
   const token = issueToken(u.id, kind, ip);
   const url = `${mail.publicUrl()}/#/reset/${token}`;
-  const name = mail.esc(u.name || u.username);
-  const body = kind === 'invite'
-    ? mail.layout(company(), 'Te han dado acceso al almacén', [
-        `Hola ${name},`,
-        `Se ha creado tu cuenta en el control de almacén de ${mail.esc(company())}. Tu usuario es <b>${mail.esc(u.username)}</b>.`,
-        `Elige tu contraseña con el siguiente enlace. Caduca en ${CFG.inviteHours} horas y solo se puede usar una vez.`
-      ], { label: 'Elegir mi contraseña', url }, 'Si no esperabas este correo, puedes ignorarlo.')
-    : mail.layout(company(), 'Restablecer tu contraseña', [
-        `Hola ${name},`,
-        `Hemos recibido una petición para restablecer la contraseña del usuario <b>${mail.esc(u.username)}</b>.`,
-        `El enlace caduca en ${CFG.resetMinutes} minutos y solo se puede usar una vez.`
-      ], { label: 'Elegir nueva contraseña', url }, 'Si no lo has pedido tú, ignora este correo: tu contraseña actual sigue siendo válida.');
-  await mail.send(u.email, kind === 'invite' ? `Tu acceso al almacén de ${company()}` : `Restablecer contraseña · Almacén ${company()}`, body);
+  const vars = { nombre: u.name || u.username, usuario: u.username, empresa: company(), horas: String(CFG.inviteHours), minutos: String(CFG.resetMinutes) };
+  const T = kind === 'invite'
+    ? mailText('invite', vars, 'Tu acceso al almacén de {empresa}', 'Hola {nombre},\n\nSe ha creado tu cuenta en el control de almacén de {empresa}. Tu usuario es {usuario}.\n\nElige tu contraseña con el botón de abajo. El enlace caduca en {horas} horas y solo se puede usar una vez.')
+    : mailText('reset', vars, 'Restablecer contraseña · Almacén {empresa}', 'Hola {nombre},\n\nHemos recibido una petición para restablecer la contraseña del usuario {usuario}.\n\nEl enlace caduca en {minutos} minutos y solo se puede usar una vez.');
+  const body = mail.layout(company(), kind === 'invite' ? 'Te han dado acceso al almacén' : 'Restablecer tu contraseña', T.paras,
+    { label: kind === 'invite' ? 'Elegir mi contraseña' : 'Elegir nueva contraseña', url },
+    kind === 'invite' ? 'Si no esperabas este correo, puedes ignorarlo.' : 'Si no lo has pedido tú, ignora este correo: tu contraseña actual sigue siendo válida.');
+  await mail.send(u.email, T.asunto, body);
 }
 function notifyPasswordChanged(u, how) {
   if (!mail.enabled() || !u.email) return;
-  const body = mail.layout(company(), 'Tu contraseña se ha cambiado', [
-    `Hola ${mail.esc(u.name || u.username)},`,
-    `La contraseña del usuario <b>${mail.esc(u.username)}</b> se ha cambiado ${how} el ${new Date().toLocaleString('es-ES')}.`,
-    'Si no has sido tú, avisa cuanto antes a un administrador.'
-  ]);
-  mail.send(u.email, `Contraseña cambiada · Almacén ${company()}`, body).catch(e => console.error('Correo de aviso:', e.message));
+  const T = mailText('passwd', { nombre: u.name || u.username, usuario: u.username, empresa: company(), como: how, fecha: new Date().toLocaleString('es-ES') },
+    'Contraseña cambiada · Almacén {empresa}', 'Hola {nombre},\n\nLa contraseña del usuario {usuario} se ha cambiado {como} el {fecha}.\n\nSi no has sido tú, avisa cuanto antes a un administrador.');
+  const body = mail.layout(company(), 'Tu contraseña se ha cambiado', T.paras);
+  mail.send(u.email, T.asunto, body).catch(e => console.error('Correo de aviso:', e.message));
 }
 const forgotIp = new Map();
 function forgotAllowed(ip) {
@@ -669,6 +670,16 @@ function sanitizeSettings(s) {
   out.recogida.labels = labels(rc.labels);
   out.combos = (Array.isArray(out.combos) ? out.combos : []).filter(isObj).slice(0, 20).map(c => ({ key: /^combo_[a-z0-9]{2,24}$/.test(c.key || '') ? c.key : 'combo_' + newId().slice(-8).toLowerCase(), label: s40(c.label, 60) || 'Columna', template: s40(c.template, 200) }));
   const tm = isObj(out.tema) ? out.tema : {};
+  const ce = isObj(out.certificado) ? out.certificado : {};
+  out.certificado = { titulo: s40(ce.titulo, 60), texto: s40(ce.texto, 3000), firma1: s40(ce.firma1, 60), firma2: s40(ce.firma2, 60), pie: s40(ce.pie, 400) };
+  const rt = isObj(out.retirada) ? out.retirada : {};
+  out.retirada = { condicion: s40(rt.condicion, 60) || 'Usado' };
+  const co = isObj(out.correos) ? out.correos : {};
+  out.correos = {}; ['invite', 'reset', 'passwd', 'stock'].forEach(k => { const v = isObj(co[k]) ? co[k] : {}; out.correos[k] = { asunto: s40(v.asunto, 200), texto: s40(v.texto, 3000) }; });
+  const db0 = isObj(out.dashboard) ? out.dashboard : {};
+  out.dashboard = { hidden: (Array.isArray(db0.hidden) ? db0.hidden : []).filter(k => /^[a-z]{2,20}$/.test(k)).slice(0, 40) };
+  out.objTypes = (Array.isArray(out.objTypes) ? out.objTypes : []).filter(isObj).slice(0, 40).map(t => ({ key: /^[a-z0-9_]{2,30}$/.test(t.key || '') ? t.key : 'x_' + newId().slice(-8).toLowerCase(), l: s40(t.l, 40) || 'Elemento',
+    w: num(t.w, 0.05, 100, 1), d: num(t.d, 0.05, 100, 1), h: num(t.h, 0, 20, 1), c: /^#[0-9a-fA-F]{6}$/.test(t.c || '') ? t.c : '#94A3B8', custom: !!t.custom }));
   const sp = isObj(out.splash) ? out.splash : {};
   out.splash = { enabled: sp.enabled !== false, show: sp.show === 'text' ? 'text' : 'auto', title: s40(sp.title, 60), sub: s40(sp.sub, 80), msg: s40(sp.msg, 120),
     anim: ['rack', 'pulse', 'none'].includes(sp.anim) ? sp.anim : 'rack', bg: ['auto', 'color', 'white'].includes(sp.bg) ? sp.bg : 'auto', minMs: num(sp.minMs, 0, 4000, 650) };
@@ -685,7 +696,7 @@ function sanitizeSettings(s) {
     plantas: (Array.isArray(L && L.plantas) ? L.plantas : []).filter(isObj).slice(0, 6).map(q => ({ id: s40(q.id, 40) || newId(), nombre: s40(q.nombre, 40) || 'Altillo', altura: num(q.altura, 0.5, 30, 3), x: Number(q.x) || 0, z: Number(q.z) || 0, w: num(q.w, 1, 500, 10), d: num(q.d, 1, 500, 6) })),
     plan: L && isObj(L.plan) && typeof L.plan.image === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(L.plan.image) && L.plan.image.length <= 1600000
       ? { image: L.plan.image, opacity: Math.min(1, Math.max(0.1, Number(L.plan.opacity) || 0.6)), ratio: Number(L.plan.ratio) || 0 } : undefined,
-    objects: (Array.isArray(L && L.objects) ? L.objects : []).filter(isObj).slice(0, 300).map(o => ({ id: s40(o.id, 40) || newId(), type: ['pasillo', 'pilar', 'pared', 'oficina', 'mesa', 'embalaje', 'extintor', 'salida'].includes(o.type) ? o.type : 'pilar', name: s40(o.name, 40), x: Number(o.x) || 0, z: Number(o.z) || 0, w: num(o.w, 0.05, 200, 1), d: num(o.d, 0.05, 200, 1), rot: Number(o.rot) === 90 ? 90 : 0, planta: s40(o.planta, 40) })),
+    objects: (Array.isArray(L && L.objects) ? L.objects : []).filter(isObj).slice(0, 300).map(o => ({ id: s40(o.id, 40) || newId(), type: /^[a-z0-9_]{2,30}$/.test(o.type || '') ? o.type : 'pilar', name: s40(o.name, 40), x: Number(o.x) || 0, z: Number(o.z) || 0, w: num(o.w, 0.05, 200, 1), d: num(o.d, 0.05, 200, 1), rot: Number(o.rot) === 90 ? 90 : 0, planta: s40(o.planta, 40) })),
     doors: (Array.isArray(L && L.doors) ? L.doors : []).filter(isObj).slice(0, 20).map(d => ({ id: s40(d.id, 40) || newId(), name: s40(d.name, 40), wall: /^(N|S|E|O|e\d{1,2})$/.test(d.wall || '') ? d.wall : 'S', pos: Number(d.pos) || 0, width: num(d.width, 0.5, 50, 2) })),
     zones: (Array.isArray(L && L.zones) ? L.zones : []).filter(isObj).slice(0, 100).map(z => ({ id: s40(z.id, 40) || newId(), name: s40(z.name, 60), x: Number(z.x) || 0, z: Number(z.z) || 0, w: num(z.w, 1, 500, 5), d: num(z.d, 1, 500, 4), color: /^#[0-9a-fA-F]{6}$/.test(z.color || '') ? z.color : '#475569', planta: s40(z.planta, 40) })) });
   const seenCli = new Set(), seenLoc = new Set();
