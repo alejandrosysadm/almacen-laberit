@@ -697,3 +697,8 @@ span.dash-leg{cursor:default}
 .dash-blocks{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px 18px}
 .dash-r2.one{grid-template-columns:1fr}
 .dash-hero-body.no-iso{grid-template-columns:1fr}
+
+.tab-prev{display:inline-flex;align-items:center;gap:10px;padding:8px 12px 8px 12px;min-width:240px;max-width:340px;background:var(--sunken);border:1px solid var(--line);border-bottom:0;border-radius:10px 10px 0 0;font-size:13px;box-shadow:0 2px 0 var(--paper)}
+.tab-prev-ico img{width:16px;height:16px;display:block}
+#tab-prev-t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab-prev-x{color:var(--muted)}

@@ -388,7 +388,7 @@ api.get('/bootstrap', (req, res) => {
   res.json({
     needsSetup, setupToken: needsSetup && !!CFG.setupToken, mailEnabled: mail.enabled(),
     user: a ? publicUser(a.u) : null,
-    settings: { company: s.company, minPassword: s.minPassword, brand: s.brand, tema: s.tema }
+    settings: { company: s.company, minPassword: s.minPassword, brand: s.brand, tema: s.tema, web: { titulo: (s.web || {}).titulo || '' } }
   });
 });
 
@@ -680,6 +680,8 @@ function sanitizeSettings(s) {
   out.dashboard = { hidden: (Array.isArray(db0.hidden) ? db0.hidden : []).filter(k => /^[a-z]{2,20}$/.test(k)).slice(0, 40) };
   out.objTypes = (Array.isArray(out.objTypes) ? out.objTypes : []).filter(isObj).slice(0, 40).map(t => ({ key: /^[a-z0-9_]{2,30}$/.test(t.key || '') ? t.key : 'x_' + newId().slice(-8).toLowerCase(), l: s40(t.l, 40) || 'Elemento',
     w: num(t.w, 0.05, 100, 1), d: num(t.d, 0.05, 100, 1), h: num(t.h, 0, 20, 1), c: /^#[0-9a-fA-F]{6}$/.test(t.c || '') ? t.c : '#94A3B8', custom: !!t.custom }));
+  const wb = isObj(out.web) ? out.web : {};
+  out.web = { titulo: s40(wb.titulo, 80), favicon: typeof wb.favicon === 'string' && /^data:image\/(png|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/.test(wb.favicon) && wb.favicon.length <= 300000 ? wb.favicon : '' };
   const sp = isObj(out.splash) ? out.splash : {};
   out.splash = { enabled: sp.enabled !== false, show: sp.show === 'text' ? 'text' : 'auto', title: s40(sp.title, 60), sub: s40(sp.sub, 80), msg: s40(sp.msg, 120),
     anim: ['rack', 'pulse', 'none'].includes(sp.anim) ? sp.anim : 'rack', bg: ['auto', 'color', 'white'].includes(sp.bg) ? sp.bg : 'auto', minMs: num(sp.minMs, 0, 4000, 650) };
@@ -706,6 +708,7 @@ function sanitizeSettings(s) {
     return { id: /^[A-Za-z0-9_-]{2,64}$/.test(a.id || '') ? a.id : newId(), nombre: s40(a.nombre, 80) || 'Almacén',
       clientes: [...new Set((Array.isArray(a.clientes) ? a.clientes : []).map(c => s40(c, 120)).filter(Boolean))], layout: L };
   });
+  if (out.lists && Array.isArray(out.lists.clientes)) { const cl = new Set(out.lists.clientes); out.almacenes.forEach(a => { a.clientes = a.clientes.filter(c => cl.has(c)); }); }
   out.layout = out.almacenes[0].layout;
   out.stockRemindDays = num(out.stockRemindDays, 0, 365, 7);
   const br = isObj(out.brand) ? out.brand : {};
@@ -1097,6 +1100,25 @@ api.use((err, req, res, next) => {
 });
 app.use('/api', api);
 
+// Página principal con el título y el icono de Ajustes → General (se ven en la pestaña del navegador).
+const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
+function webCfg() { const w = settings().web || {}; return { titulo: w.titulo || `Almacén ${settings().company || 'Laberit'}`, favicon: w.favicon || '' }; }
+const favHash = f => f ? crypto.createHash('sha1').update(f).digest('hex').slice(0, 10) : '';
+app.get(['/', '/index.html'], (req, res, next) => {
+  fs.readFile(INDEX_FILE, 'utf8', (err, html) => {
+    if (err) return next();
+    const w = webCfg(), esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const type = (w.favicon.match(/^data:([^;]+);/) || [])[1] || 'image/svg+xml';
+    html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(w.titulo)}</title>`)
+      .replace(/<link rel="icon"[^>]*>/, w.favicon ? `<link rel="icon" href="favicon-propio?v=${favHash(w.favicon)}" type="${type}">` : '<link rel="icon" href="favicon.svg" type="image/svg+xml">');
+    res.setHeader('Cache-Control', 'no-cache'); res.type('html').send(html);
+  });
+});
+app.get('/favicon-propio', (req, res) => {
+  const f = webCfg().favicon; if (!f) return res.redirect('favicon.svg');
+  const m = /^data:([^;]+);base64,(.+)$/.exec(f); if (!m) return res.redirect('favicon.svg');
+  res.setHeader('Cache-Control', 'public, max-age=604800'); res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+});
 app.use(express.static(path.join(__dirname, 'public'), {
   maxAge: '7d',
   setHeaders(res, file) { if (/\.(html|js|css)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); }
@@ -1132,6 +1154,8 @@ if (CFG.tlsPfx) {
   if (st && st.lists && Array.isArray(st.lists.estados)) {
     const E = estados(); let ch = false;
     [E.transito, E.retirado].forEach(v => { if (!st.lists.estados.includes(v)) { st.lists.estados.push(v); ch = true; } });
+    // Clientes que se borraron de la lista pero se quedaron asignados a un almacén.
+    if (Array.isArray(st.lists.clientes) && Array.isArray(st.almacenes)) { const cl = new Set(st.lists.clientes); st.almacenes.forEach(a => { const n = (a.clientes || []).length; a.clientes = (a.clientes || []).filter(c => cl.has(c)); if (a.clientes.length !== n) ch = true; }); }
     if (ch) saveSettings(st);
   }
   const rows = db.prepare('SELECT id, data FROM items').all(); let n = 0;

@@ -266,6 +266,7 @@ function mergeSettings(s) {
   out.correos = {}; ['invite', 'reset', 'passwd', 'stock'].forEach(k => { out.correos[k] = Object.assign({asunto:'', texto:''}, ((s && s.correos) || {})[k] || {}); });
   out.dashboard = {hidden: ((s && s.dashboard && s.dashboard.hidden) || []).slice()};
   out.objTypes = (s && Array.isArray(s.objTypes)) ? clone(s.objTypes) : [];
+  out.web = Object.assign({titulo:'', favicon:''}, (s && s.web) || {});
   out.splash = Object.assign({enabled:true, show:'auto', title:'', sub:'', msg:'', anim:'rack', bg:'auto', minMs:650}, (s && s.splash) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
   out.albaran.labels = Object.assign({}, out.albaran.labels || {}); out.recogida.labels = Object.assign({}, out.recogida.labels || {});
@@ -1979,6 +1980,12 @@ VIEWS.ajustes = () => {
       <label class="f">Verificación en dos pasos<select class="sel sm" data-bind="mfaRequired" id="b-mfaRequired">${[['off', 'Opcional (cada usuario decide)'], ['admins', 'Obligatoria para administradores'], ['all', 'Obligatoria para todos']].map(([v, l]) => `<option value="${v}" ${d.mfaRequired === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Recordar el equipo durante (días) ${bInp('mfaRememberDays', 'number', 'min="0" max="90"')}<span class="help">0 para pedir el código siempre.</span></label>
     </div><p class="help" style="margin-top:16px">Las contraseñas se guardan en el servidor con scrypt y una sal aleatoria por usuario; nunca en claro. La sesión usa una cookie HttpOnly y caduca tras el tiempo de inactividad indicado.</p></div></section>
+    <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Pestaña del navegador</h3><span class="help">El texto y el icono que se ven en la pestaña, en los favoritos y en la barra de tareas.</span></div></div><div class="panel-b">
+      <div class="tab-prev"><span class="tab-prev-ico">${d.web.favicon ? `<img src="${esc(d.web.favicon)}" alt="">` : `<img src="favicon.svg" alt="">`}</span><span id="tab-prev-t">${esc(d.web.titulo || `Almacén ${d.company || 'Laberit'}`)}</span><span class="tab-prev-x">×</span></div>
+      <div class="fgrid" style="margin-top:14px">
+        <label class="f">Texto de la pestaña ${bInp('web.titulo', 'text', `placeholder="Almacén ${esc(d.company || 'Laberit')}"`)}<span class="help">Vacío = «Almacén» y el nombre de la empresa.</span></label>
+        <div class="f"><span>Icono</span><span class="row"><label class="btn sm" style="cursor:pointer">${ico('up')}${d.web.favicon ? 'Cambiar icono' : 'Subir icono'}<input type="file" id="fav-file" accept="image/png,image/jpeg,image/svg+xml,image/x-icon,.ico,.svg" class="sr"></label>${d.web.favicon ? `<button class="btn sm ghost" data-act="favDel">${ico('reset')}Usar el de siempre</button>` : ''}</span><span class="help">PNG, JPG, ICO o SVG. Mejor cuadrado; se ajusta a 64 × 64.</span></div>
+      </div></div></section>
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Pantalla de carga</h3><span class="help">La que se ve al abrir la aplicación, antes del inicio de sesión. Los cambios se aplican desde la siguiente visita de cada navegador.</span></div><button class="btn sm" data-act="splashPreview">${ico('eye')}Vista previa</button></div><div class="panel-b"><div class="fgrid">
       <label class="f">Mostrar<span style="height:32px;display:flex;align-items:center">${bChk('splash.enabled', 'Pantalla de carga activada')}</span></label>
       <label class="f">Qué se ve<select class="sel sm" data-bind="splash.show" id="b-splash_show"><option value="auto" ${d.splash.show !== 'text' ? 'selected' : ''}>El logotipo del menú (si hay imagen)</option><option value="text" ${d.splash.show === 'text' ? 'selected' : ''}>Solo el texto</option></select></label>
@@ -2168,7 +2175,7 @@ VIEWS.ajustes = () => {
     const ai = d.almacenes.findIndex(a => a.id === S.almSel), A = d.almacenes[ai], LP = `almacenes.${ai}.layout`, L = A.layout;
     const owner = c => d.almacenes.find(a => (a.clientes || []).includes(c));
     const nItems = Object.values(Store.items).filter(it => almOfItem(it) === A.id).length;
-    body = `<div class="split-pane"><section class="panel"><div class="list-nav">${d.almacenes.map(a => `<button class="${a.id === S.almSel ? 'on' : ''}" data-act="almSel" data-k="${esc(a.id)}"><span>${esc(a.nombre)}</span><span class="c">${(a.clientes || []).length} cli.</span></button>`).join('')}</div>
+    body = `<div class="split-pane"><section class="panel"><div class="list-nav">${d.almacenes.map(a => `<button class="${a.id === S.almSel ? 'on' : ''}" data-act="almSel" data-k="${esc(a.id)}"><span>${esc(a.nombre)}</span><span class="c">${(a.clientes || []).filter(c => (d.lists.clientes || []).includes(c)).length} cli.</span></button>`).join('')}</div>
       <div class="panel-b" style="border-top:1px solid var(--line)"><label class="f">Nuevo almacén<span class="selwrap"><input class="inp sm" id="new-alm" placeholder="Ej. Almacén Lisboa"><button class="btn sm" data-act="almAdd">${ico('plus')}</button></span></label></div></section>
       <div><section class="panel"><div class="panel-h"><h3>${esc(A.nombre)}</h3>${d.almacenes.length > 1 ? `<button class="btn sm danger" data-act="almDel" ${(A.clientes || []).length ? 'disabled title="Quita antes sus clientes"' : ''}>${ico('trash')}Eliminar almacén</button>` : ''}</div><div class="panel-b">
         <label class="f" style="max-width:340px">Nombre ${bInp(`almacenes.${ai}.nombre`)}</label>
@@ -2287,6 +2294,7 @@ async function saveSettings() {
   const missing = [...(E.stock || []), E.reservado, E.enviado, E.transito, E.retirado, ...(E.baja || [])].filter(v => v && !est.includes(v));
   if (missing.length) { toast(`Los estados con significado deben existir en la lista de estados: falta «${missing[0]}». Revísalo en Ajustes → General.`, 'warn', 8000); return; }
   if (!(E.stock || []).length) { toast('Elige al menos un estado que cuente como disponible (Ajustes → General).', 'warn'); return; }
+  d.almacenes.forEach(a => { a.clientes = (a.clientes || []).filter(c => d.lists.clientes.includes(c)); });
   const sinAlm = d.lists.clientes.filter(c => !d.almacenes.some(a => (a.clientes || []).includes(c)));
   if (sinAlm.length) toast(`Clientes sin almacén: ${sinAlm.join(', ')}. Solo los verán los usuarios con acceso total hasta que los asignes.`, 'info', 7000);
   try { await Store.putSettings(d); Store.log('ajustes', 'Ajustes actualizados (' + (STABS.find(t => t[0] === S.stab) || [, ''])[1] + ')'); S.sdraft = null; toast('Ajustes guardados.'); renderNav(); renderMain(); }
@@ -2485,6 +2493,7 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  favDel: () => { draft().web.favicon = ''; applyWeb(draft().web); sRerender(); },
   otAdd: () => { const d = draft(); d.objTypes = d.objTypes || []; const n = d.objTypes.filter(t => t.custom).length + 1; d.objTypes.push({key: 'x_' + newId().slice(-8).toLowerCase(), l: 'Elemento ' + n, w: 1.5, d: 1.5, h: 1, c: '#64748B', custom: true}); sRerender(); },
   otDel: async el => { const d = draft(), k = el.dataset.k; const used = d.almacenes.reduce((a, A) => a + (A.layout.objects || []).filter(o => o.type === k).length, 0);
     if (used && !await confirmDlg('Eliminar tipo', `Hay ${plural(used, 'elemento')} de este tipo en los planos. Se mostrarán como pilares.`, 'Eliminar')) return;
@@ -2669,7 +2678,7 @@ const ACT = {
     catch (ex) { toast(ex.message, 'err'); el.disabled = false; }
   },
   brandRemove: () => { const d = draft(); d.brand.logo = ''; d.brand.mode = 'text'; sRerender(); },
-  sDiscard: () => { S.sdraft = null; applyTheme(); renderMain(); },
+  sDiscard: () => { S.sdraft = null; applyTheme(); applyWeb(); renderMain(); },
   listSel: el => { S.listSel = el.dataset.k; sRerender(); },
   listAdd: () => { const n = $('#new-list').value.trim(); if (!n) return; const d = draft(); let k = slug(n); while (d.lists[k]) k += '_2'; d.lists[k] = []; d.listLabels[k] = n; S.listSel = k; sRerender(); },
   listDel: async () => { if (!await confirmDlg('Eliminar lista', `Se eliminará la lista «${esc(draft().listLabels[S.listSel] || S.listSel)}» al guardar.`, 'Eliminar')) return; const d = draft(); delete d.lists[S.listSel]; delete d.listLabels[S.listSel]; S.listSel = Object.keys(d.lists)[0]; sRerender(); },
@@ -2754,6 +2763,7 @@ document.addEventListener('input', e => {
     const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty());
     if (S.stab === 'almacen') drawLayoutPreview();
     if (/^(company|brand\.)/.test(t.dataset.bind)) updateBrandPreview();
+    if (t.dataset.bind === 'web.titulo' || t.dataset.bind === 'company') { const pv = $('#tab-prev-t'); if (pv) pv.textContent = S.sdraft.web.titulo || `Almacén ${S.sdraft.company || 'Laberit'}`; }
     { const m = /^combos\.(\d+)\.template$/.exec(t.dataset.bind); if (m) { const el = $('#combo-prev-' + m[1]); if (el) el.textContent = comboPreview(t.value); } }
     if (/^numeracion\./.test(t.dataset.bind)) { const np = $('#num-prev'); if (np) np.textContent = 'Ejemplo: ' + numPreview(S.sdraft); }
     if (t.dataset.bind === 'tema.primario') { applyTheme(t.value); const hx = $('#b-tema_hex'); if (hx && hx !== t) hx.value = t.value; }
@@ -2792,6 +2802,7 @@ document.addEventListener('change', e => {
   if (t.id === 'map-heat') { S.mapHeat = t.value; Map3D.applyHeat(); renderMapSide(); return; }
   if (t.id === 'map-client') { S.mapClient = t.value; Map3D.refresh(); renderMapSide(); return; }
   if (t.id === 'sede-filter') { S.sedeFilter = t.value; sRerender(); return; }
+  if (t.id === 'fav-file' && t.files[0]) { const f = t.files[0]; t.value = ''; processFavicon(f).then(url => { draft().web.favicon = url; applyWeb(draft().web); sRerender(); }).catch(ex => toast(ex.message, 'err')); return; }
   if (['tr-cliente', 'tr-origen', 'tr-destino'].includes(t.id)) { const T = S.tr = S.tr || {}; T.serials = ($('#tr-serials') || {}).value || ''; T[t.id.slice(3)] = t.value; if (t.id !== 'tr-destino') T.bulk = []; renderMain(); return; }
   if (t.id === 'rt-cliente') { S.rt = S.rt || {}; S.rt.cliente = t.value; const keep = $('#rt-serials').value; renderMain(); $('#rt-serials').value = keep; return; }
   if (t.id === 'plan-file' && t.files[0]) { const f = t.files[0]; t.value = ''; toast('Procesando el plano…', 'info'); processPlan(f).then(r => { const L = (draft().almacenes.find(a => a.id === S.almSel) || draft().almacenes[0]).layout; L.plan = {image: r.url, opacity: (L.plan && L.plan.opacity) || 0.6, ratio: r.ratio}; sRerender(); toast('Plano cargado. Pulsa «Guardar cambios» para aplicarlo.', 'info'); }).catch(ex => toast(ex.message, 'err')); return; }
@@ -2846,7 +2857,7 @@ function gSearch(q) {
 (function boot() {
   const th = LS.get('lbinv.theme', null); if (th) document.documentElement.dataset.theme = th;
   Store.onChange = kinds => {
-    if (kinds.has('settings') || kinds.has('all')) { applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined); if (Store.settings) saveSplash(); }
+    if (kinds.has('settings') || kinds.has('all')) { applyWeb(); applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined); if (Store.settings) saveSplash(); }
     const onAuth = $('#login-form') || $('#setup-form') || $('#force-form');
     if (!$('#shell') || onAuth || kinds.has('all')) { renderApp(); return; }
     if (kinds.has('net')) { const lv = $('.dash-live'); if (lv) { lv.classList.toggle('on', Store.online); lv.lastChild.textContent = Store.online ? 'En directo' : 'Reconectando…'; } }
@@ -4128,3 +4139,26 @@ function previewSplash() {
 }
 
 const DASH_BLOCKS = [['hero', 'Centro de control (banda superior)'], ['iso', 'Dibujo del almacén en la banda'], ['movimientos', 'Movimientos'], ['actividad', 'Actividad diaria (mapa de calor)'], ['composicion', 'Composición del stock'], ['antiguedad', 'Antigüedad del stock'], ['modelos', 'Modelos disponibles'], ['ocupacion', 'Ocupación por estantería'], ['categorias', 'Stock por categoría'], ['minimos', 'Stock mínimo'], ['avisos', 'Avisos'], ['pedidos', 'Pedidos'], ['destinos', 'Destinos principales'], ['equipo', 'Equipo'], ['albaranes', 'Últimos albaranes'], ['garantias', 'Garantías y licencias'], ['almacenes', 'Por almacén'], ['feed', 'Actividad reciente']];
+
+/* ---------- Pestaña del navegador: título e icono ---------- */
+function applyWeb(w) {
+  const st = Store.settings || {}; w = w || st.web || {};
+  document.title = w.titulo || `Almacén ${st.company || 'Laberit'}`;
+  let l = document.querySelector('link[rel="icon"]');
+  if (!l) { l = document.createElement('link'); l.rel = 'icon'; document.head.appendChild(l); }
+  const href = w.favicon || 'favicon.svg';
+  if (l.getAttribute('href') !== href && !(w.favicon === undefined)) { l.href = href; l.type = w.favicon ? (w.favicon.match(/^data:([^;]+);/) || [])[1] || '' : 'image/svg+xml'; }
+}
+// Convierte la imagen elegida en un icono ligero (PNG de 64 px); los SVG se guardan tal cual.
+async function processFavicon(file) {
+  if (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name)) {
+    if (file.size > 150000) throw new Error('El SVG es demasiado grande (máximo 150 KB).');
+    const txt = await file.text(); if (/<script|on\w+=/i.test(txt)) throw new Error('El SVG contiene código y no se puede usar como icono.');
+    return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(txt)));
+  }
+  if (!/^image\//.test(file.type)) throw new Error('Elige una imagen (PNG, JPG, ICO o SVG).');
+  const bmp = await createImageBitmap(file), cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const k = Math.min(64 / bmp.width, 64 / bmp.height), w = bmp.width * k, h = bmp.height * k;
+  cv.getContext('2d').drawImage(bmp, (64 - w) / 2, (64 - h) / 2, w, h);
+  return cv.toDataURL('image/png');
+}
