@@ -258,6 +258,7 @@ function mergeSettings(s) {
   out.numeracion = Object.assign({albaran:'ALB', pedido:'PED', traspaso:'TRA', retirada:'RET', certificado:'CERT', anual:true, digitos:4}, (s && s.numeracion) || {});
   out.recogida = Object.assign({titulo:'', columns:['check', 'balda', 'cat', 'desc', 'serie', 'qty'], showSummary:true, showSignature:true, groupByLocation:true}, (s && s.recogida) || {});
   out.tema = Object.assign({primario:'#C8102E'}, (s && s.tema) || {});
+  out.splash = Object.assign({enabled:true, show:'auto', title:'', sub:'', msg:'', anim:'rack', bg:'auto', minMs:650}, (s && s.splash) || {});
   out.combos = (s && Array.isArray(s.combos)) ? clone(s.combos) : [];
   out.albaran.labels = Object.assign({}, out.albaran.labels || {}); out.recogida.labels = Object.assign({}, out.recogida.labels || {});
   out.stockRules = (s && Array.isArray(s.stockRules)) ? clone(s.stockRules) : d.stockRules;
@@ -1968,6 +1969,16 @@ VIEWS.ajustes = () => {
       <label class="f">Verificación en dos pasos<select class="sel sm" data-bind="mfaRequired" id="b-mfaRequired">${[['off', 'Opcional (cada usuario decide)'], ['admins', 'Obligatoria para administradores'], ['all', 'Obligatoria para todos']].map(([v, l]) => `<option value="${v}" ${d.mfaRequired === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="f">Recordar el equipo durante (días) ${bInp('mfaRememberDays', 'number', 'min="0" max="90"')}<span class="help">0 para pedir el código siempre.</span></label>
     </div><p class="help" style="margin-top:16px">Las contraseñas se guardan en el servidor con scrypt y una sal aleatoria por usuario; nunca en claro. La sesión usa una cookie HttpOnly y caduca tras el tiempo de inactividad indicado.</p></div></section>
+    <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Pantalla de carga</h3><span class="help">La que se ve al abrir la aplicación, antes del inicio de sesión. Los cambios se aplican desde la siguiente visita de cada navegador.</span></div><button class="btn sm" data-act="splashPreview">${ico('eye')}Vista previa</button></div><div class="panel-b"><div class="fgrid">
+      <label class="f">Mostrar<span style="height:32px;display:flex;align-items:center">${bChk('splash.enabled', 'Pantalla de carga activada')}</span></label>
+      <label class="f">Qué se ve<select class="sel sm" data-bind="splash.show" id="b-splash_show"><option value="auto" ${d.splash.show !== 'text' ? 'selected' : ''}>El logotipo del menú (si hay imagen)</option><option value="text" ${d.splash.show === 'text' ? 'selected' : ''}>Solo el texto</option></select></label>
+      <label class="f">Animación<select class="sel sm" data-bind="splash.anim" id="b-splash_anim">${[['rack', 'Estantería llenándose'], ['pulse', 'Logotipo latiendo'], ['none', 'Sin animación']].map(([k, l]) => `<option value="${k}" ${d.splash.anim === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">Fondo<select class="sel sm" data-bind="splash.bg" id="b-splash_bg">${[['auto', 'Según el tema (claro u oscuro)'], ['color', 'Color principal'], ['white', 'Siempre blanco']].map(([k, l]) => `<option value="${k}" ${d.splash.bg === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="f">Título ${bInp('splash.title', 'text', `placeholder="${esc(d.company || 'Laberit')}"`)}<span class="help">Vacío = nombre de la empresa.</span></label>
+      <label class="f">Subtítulo ${bInp('splash.sub', 'text', 'placeholder="Control de almacén"')}</label>
+      <label class="f">Mensaje bajo la barra ${bInp('splash.msg', 'text', 'placeholder="Conectando con el almacén…"')}<span class="help">Opcional.</span></label>
+      <label class="f">Tiempo mínimo (ms) ${bInp('splash.minMs', 'number', 'min="0" max="4000" step="50"')}<span class="help">Para que no sea un destello. 0 = sin mínimo.</span></label>
+    </div></div></section>
     <section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Estados con significado</h3><span class="help">Indica qué estados de tu lista usa la aplicación para el stock, los pedidos, los envíos y las bajas. Así puedes renombrarlos sin que deje de funcionar nada.</span></div></div><div class="panel-b"><div class="fgrid">
       <div class="f"><span>Cuentan como disponibles</span><div class="est-list">${(d.lists.estados || []).map(v => `<label class="chk"><input type="checkbox" data-estlist="stock" value="${esc(v)}" ${(d.estadosSistema.stock || []).includes(v) ? 'checked' : ''}>${esc(v)}</label>`).join('')}</div><span class="help">Stock, avisos y reservas de pedidos.</span></div>
       <label class="f">Reservado para un pedido<select class="sel sm" data-bind="estadosSistema.reservado" id="b-estadosSistema_reservado">${(d.lists.estados || []).map(v => `<option ${d.estadosSistema.reservado === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></label>
@@ -2434,6 +2445,7 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  splashPreview: () => previewSplash(),
   eraseOpen: () => openEraseForm([...S.sel]),
   certMake: async () => {
     const ids = [...S.sel], sin = ids.map(id => Store.items[id]).filter(it => it && !it.data.borrado);
@@ -2785,7 +2797,7 @@ function gSearch(q) {
 (function boot() {
   const th = LS.get('lbinv.theme', null); if (th) document.documentElement.dataset.theme = th;
   Store.onChange = kinds => {
-    if (kinds.has('settings') || kinds.has('all')) applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined);
+    if (kinds.has('settings') || kinds.has('all')) { applyTheme(S.sdraft && S.sdraft.tema ? S.sdraft.tema.primario : undefined); if (Store.settings) saveSplash(); }
     const onAuth = $('#login-form') || $('#setup-form') || $('#force-form');
     if (!$('#shell') || onAuth || kinds.has('all')) { renderApp(); return; }
     if (kinds.has('net')) { const lv = $('.dash-live'); if (lv) { lv.classList.toggle('on', Store.online); lv.lastChild.textContent = Store.online ? 'En directo' : 'Reconectando…'; } }
@@ -4023,18 +4035,38 @@ function openEraseForm(ids) {
 /* ---------- Pantalla de carga ---------- */
 const SPLASH_T0 = performance.now();
 function hideSplash() {
-  const sp = document.getElementById('splash'); if (!sp || sp.dataset.leaving) return;
+  const sp = document.querySelector('body > #splash'); if (!sp || sp.dataset.leaving) return;
   sp.dataset.leaving = '1';
-  const wait = Math.max(0, 650 - (performance.now() - SPLASH_T0));
+  const min = Number(((window.__splash || {}).minMs) ?? 650);
+  const wait = Math.max(0, (isNaN(min) ? 650 : min) - (performance.now() - SPLASH_T0));
   setTimeout(() => { sp.classList.add('out'); setTimeout(() => sp.remove(), 500); }, wait);
 }
 // Guarda nombre, logotipo y color para pintar la pantalla de carga de la próxima visita al instante.
 function saveSplash() {
   try {
-    const B = brandOf(Store.settings), color = (Store.settings.tema || {}).primario || '#C8102E';
-    const logo = B.mode === 'image' && B.logo && B.logo.length < 400000 ? B.logo : '';
-    const v = {company: B.company || Store.settings.company || '', sub: B.subtitle || 'Control de almacén', color, logo, bg: B.bg};
+    const v = splashCfg(Store.settings);
     const old = LS.get('lbinv.splash', null);
     if (JSON.stringify(old) !== JSON.stringify(v)) LS.set('lbinv.splash', v);
   } catch {}
+}
+
+function splashCfg(st) {
+  const B = brandOf(st), P = st.splash || {}, color = (st.tema || {}).primario || '#C8102E';
+  return {enabled: P.enabled !== false, show: P.show || 'auto', title: P.title || '', sub: P.sub !== '' && P.sub !== undefined ? P.sub : (B.subtitle || 'Control de almacén'), msg: P.msg || '',
+    anim: P.anim || 'rack', bg: P.bg || 'auto', minMs: Number(P.minMs ?? 650), company: B.company || st.company || '', color,
+    logo: B.mode === 'image' && B.logo && B.logo.length < 400000 ? B.logo : '', logoBg: B.bg};
+}
+// Vista previa dentro de la aplicación, con los ajustes que se están editando.
+function previewSplash() {
+  const old = document.getElementById('splash-prev'); if (old) old.remove();
+  const el = document.createElement('div'); el.id = 'splash-prev';
+  el.innerHTML = `<div id="splash" class="prev" title="Pulsa para cerrar"><div class="sp-in">
+    <svg class="sp-rack" viewBox="0 0 120 96" fill="none" aria-hidden="true">${[[22,14],[44,14],[66,44],[22,44],[44,74],[66,74]].map(([x, y]) => `<rect class="box" x="${x}" y="${y}" width="18" height="16" rx="2"/>`).join('')}<path class="post" d="M14 4v90M106 4v90"/><path class="shelf" d="M14 32h92M14 62h92M14 92h92"/></svg>
+    <img id="sp-logo" alt="" hidden><div id="sp-name"></div><div id="sp-sub"></div><div class="sp-bar"><i></i></div><div id="sp-msg"></div></div>
+    <span class="prev-tag">Vista previa · pulsa para cerrar</span></div>`;
+  document.body.appendChild(el);
+  const sp = el.firstElementChild;
+  if (window.applySplashTo) window.applySplashTo(splashCfg(draft()), sp);
+  const close = () => { sp.classList.add('out'); setTimeout(() => el.remove(), 450); };
+  sp.addEventListener('click', close); setTimeout(close, 4000);
 }

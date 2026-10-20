@@ -690,3 +690,6 @@ span.dash-leg{cursor:default}
 .map-loading .sp-bar i{display:block;width:40%;height:100%;background:var(--red);border-radius:3px;animation:spBar 1.2s ease-in-out infinite}
 @keyframes spBar{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
 @media (prefers-reduced-motion:reduce){.auth,.auth .auth-form form{animation:none}}
+
+#splash-prev #splash{cursor:pointer}
+#splash-prev .prev-tag{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;font-weight:600;color:var(--sp-mut);border:1px solid var(--sp-line);padding:4px 10px;border-radius:999px}

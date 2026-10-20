@@ -669,6 +669,9 @@ function sanitizeSettings(s) {
   out.recogida.labels = labels(rc.labels);
   out.combos = (Array.isArray(out.combos) ? out.combos : []).filter(isObj).slice(0, 20).map(c => ({ key: /^combo_[a-z0-9]{2,24}$/.test(c.key || '') ? c.key : 'combo_' + newId().slice(-8).toLowerCase(), label: s40(c.label, 60) || 'Columna', template: s40(c.template, 200) }));
   const tm = isObj(out.tema) ? out.tema : {};
+  const sp = isObj(out.splash) ? out.splash : {};
+  out.splash = { enabled: sp.enabled !== false, show: sp.show === 'text' ? 'text' : 'auto', title: s40(sp.title, 60), sub: s40(sp.sub, 80), msg: s40(sp.msg, 120),
+    anim: ['rack', 'pulse', 'none'].includes(sp.anim) ? sp.anim : 'rack', bg: ['auto', 'color', 'white'].includes(sp.bg) ? sp.bg : 'auto', minMs: num(sp.minMs, 0, 4000, 650) };
   out.tema = { primario: /^#[0-9a-fA-F]{6}$/.test(tm.primario || '') ? tm.primario : '#C8102E' };
   (out.stockRules || []).forEach((r, i) => { const src = (s.stockRules || [])[i] || {}; r.almacen = s40(src.almacen, 64); });
   const est = isObj(out.estadosSistema) ? out.estadosSistema : {};

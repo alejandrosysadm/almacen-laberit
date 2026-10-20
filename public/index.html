@@ -28,6 +28,18 @@
   #sp-sub{font-size:14px;color:var(--sp-mut);margin-top:-6px}
   .sp-bar{width:180px;height:3px;border-radius:3px;background:var(--sp-line);overflow:hidden;margin-top:6px}
   .sp-bar i{display:block;width:40%;height:100%;border-radius:3px;background:var(--sp-c);animation:spBar 1.2s ease-in-out infinite}
+  #sp-msg{font-size:13px;color:var(--sp-mut);min-height:16px}
+  #sp-msg:empty{display:none}
+  #splash[data-anim="pulse"] .sp-rack,#splash[data-anim="none"] .sp-rack{display:none}
+  #splash[data-anim="pulse"] #sp-name,#splash[data-anim="pulse"] #sp-logo{animation:spPulse 1.6s ease-in-out infinite}
+  #splash[data-anim="none"] .sp-bar i{animation:none;width:100%;opacity:.5}
+  #splash[data-bg="white"]{background:#fff;--sp-ink:#18181B;--sp-mut:#71717A;--sp-line:#E4E4E7}
+  #splash[data-bg="color"]{background:var(--sp-c);--sp-ink:#fff;--sp-mut:rgba(255,255,255,.82);--sp-line:rgba(255,255,255,.3)}
+  #splash[data-bg="color"]::before{background:radial-gradient(600px 380px at 50% 42%,rgba(255,255,255,.16),transparent 70%)}
+  #splash[data-bg="color"] #sp-name{color:#fff}
+  #splash[data-bg="color"] .sp-rack .box,#splash[data-bg="color"] .sp-bar i{fill:#fff;background:#fff}
+  html.no-splash #splash{display:none}
+  @keyframes spPulse{50%{transform:scale(1.06);opacity:.75}}
   @keyframes spBox{0%{opacity:0;transform:translateY(-14px)}12%,70%{opacity:1;transform:none}85%,100%{opacity:0;transform:none}}
   @keyframes spBar{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
   @keyframes spUp{from{opacity:0;transform:translateY(10px)}}
@@ -48,6 +60,7 @@
     <div id="sp-name">Laberit</div>
     <div id="sp-sub">Control de almacén</div>
     <div class="sp-bar"><i></i></div>
+    <div id="sp-msg"></div>
   </div>
 </div>
 <script src="splash.js"></script>
