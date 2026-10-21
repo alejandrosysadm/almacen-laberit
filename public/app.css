@@ -727,3 +727,11 @@ span.dash-leg{cursor:default}
 .lic-banner.warn{background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
 .lic-banner.red{background:var(--red-soft);border-color:var(--red-line);color:var(--red-ink);font-weight:600}
 .lic-banner a{font-weight:700;color:inherit}
+
+.lic-drop{display:flex;gap:12px;align-items:center;margin:6px 0 8px}
+.upd-new{padding:12px 14px;border:1px solid var(--red-line);background:var(--red-soft);border-radius:10px}
+.upd-notes{margin-top:8px;font-size:13.5px;color:var(--ink-2)}
+.upd-overlay{position:fixed;inset:0;z-index:9000;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(4px);display:grid;place-items:center}
+.upd-box{text-align:center;max-width:440px;padding:24px}
+.upd-box .sp-bar{width:220px;height:3px;border-radius:3px;background:var(--line);overflow:hidden;margin:0 auto 18px}
+.upd-box .sp-bar i{display:block;width:40%;height:100%;background:var(--red);border-radius:3px;animation:spBar 1.2s ease-in-out infinite}

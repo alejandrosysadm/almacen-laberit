@@ -38,11 +38,21 @@ mkdir -p backups; GUARDA="backups/programa-$(ver)-$(date +%Y%m%d-%H%M).tar.gz"
 programa | tar -czf "$GUARDA" -T -; echo "   Versión actual guardada en $GUARDA"
 
 CAMBIA_DEP=0; cmp -s package-lock.json "$NUEVA/package-lock.json" || CAMBIA_DEP=1
+DESDE=$(ver)
+if [ -n "${APP_PID:-}" ]; then
+  # Actualización lanzada desde la web: el lanzador comprobará al arrancar que la nueva versión funciona
+  mkdir -p data
+  printf '{"pendiente":true,"desde":"%s","hacia":"%s","programa":"%s","intentos":0,"usuario":"%s","inicio":"%s"}\n' "$DESDE" "$NV" "$(pwd)/$GUARDA" "${APP_USER:-}" "$(date -Iseconds)" > data/actualizacion.json
+fi
 programa | xargs rm -rf
 ( cd "$NUEVA" && ls -A | grep -v -x -e data -e backups -e certs -e logs -e node_modules -e .env | xargs -I{} cp -a {} "$OLDPWD/" )
 chmod +x scripts/*.sh 2>/dev/null || true
 if [ "$CAMBIA_DEP" = 1 ] || [ ! -d node_modules ]; then echo "== Instalando dependencias"; npm ci --omit=dev --silent; fi
 
+if [ -n "${APP_PID:-}" ]; then
+  echo "== Reiniciando la aplicación (el servicio la vuelve a arrancar con la versión $NV)"
+  kill "$APP_PID"; exit 0
+fi
 if reiniciar; then echo "OK: funcionando con la versión $NV"; else
   echo "ERROR: la versión nueva no arranca. Volviendo a la anterior…"
   programa | xargs rm -rf; tar -xzf "$GUARDA"; npm ci --omit=dev --silent; reiniciar || true

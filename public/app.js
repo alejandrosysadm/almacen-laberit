@@ -81,6 +81,7 @@ const ICONS = {
   shield:'<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
   expand:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  check:'<path d="M5 12l5 5L20 7"/>',
   camera:'<path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/>',
   truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
   clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
@@ -425,7 +426,7 @@ const Auth = {
   },
   touch() { this.last = Date.now(); },
   restore() { return !!this.user; },
-  async logout(msg) { if (this.user) { try { await API('POST', '/api/logout'); } catch {} } this.clear(msg); },
+  async logout(msg) { if (this.user) { try { await API('POST', '/api/logout'); } catch {} } Store.lic = undefined; S.upd = null; this.clear(msg); },
   expired() { if (this.user) this.clear('Tu sesión ha caducado. Vuelve a iniciar sesión.'); },
   clear(msg) {
     this.user = null; Store.disconnect(); Store.items = {}; Store.users = {}; Store.entries = [];
@@ -626,7 +627,7 @@ function renderApp() {
     if (!$('#splash')) app.innerHTML = `<div class="empty" style="padding-top:30vh"><h3>Cargando el almacén…</h3><p>Conectando con los datos compartidos.</p></div>`; return;
   }
   saveSplash(); hideSplash();
-  if (Store.lic === undefined && !Store._licLoading) { Store._licLoading = true; API('GET', '/api/license').then(l => { Store.lic = l; if (l.enforce) renderMain(); }).catch(() => { Store.lic = null; }).finally(() => { Store._licLoading = false; }); }
+  if (Auth.user && Store.lic === undefined && !Store._licLoading) { Store._licLoading = true; API('GET', '/api/license').then(l => { Store.lic = l; if (l.enforce && fullSettings()) API('GET', '/api/updates/check').then(u => { if (!S.upd) S.upd = u; if (u && u.nueva) renderMain(); }).catch(() => {}); if (l.enforce) renderMain(); }).catch(() => { Store.lic = null; }).finally(() => { Store._licLoading = false; }); }
   if (/^#\/reset\//.test(location.hash) && !Store.needsSetup) { if (!$('#reset-form') && !$('#reset-msg')) showReset(location.hash.slice(8)); return; }
   if (Store.needsSetup) { if (!$('#setup-form')) { app.innerHTML = authHTML('setup'); bindAuth('setup'); } return; }
   if (!Auth.user && ($('#forgot-form') || $('#mfa-form'))) return;
@@ -2235,9 +2236,12 @@ VIEWS.ajustes = () => {
         ${L.build && L.build.version ? `<dt>Versión</dt><dd>${esc(L.build.version)} (${esc(L.build.fecha)})</dd>` : ''}
       </dl>
       ${L.error ? `<div class="err-msg" style="margin-top:12px">La licencia instalada no es válida: ${esc(L.error)}</div>` : ''}
-      <label class="f" style="margin-top:16px">Instalar o renovar la licencia<textarea class="ta serial" id="lic-text" rows="4" placeholder="Pega aquí el texto de la licencia que te ha enviado tu proveedor"></textarea></label>
+      <div class="f" style="margin-top:16px"><span>Instalar o renovar la licencia</span>
+        <div class="lic-drop"><label class="btn" style="cursor:pointer">${ico('up')}Subir archivo .lic<input type="file" id="lic-file" accept=".lic,text/plain" class="sr"></label><span class="help">o pega el texto de la licencia:</span></div>
+        <textarea class="ta serial" id="lic-text" rows="3" placeholder="Pega aquí el texto de la licencia que te ha enviado tu proveedor"></textarea></div>
       <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" data-act="licInstall">${ico('key')}Instalar licencia</button></div>
-    </div></section>`;
+    </div></section>
+    ${updatesPanelHTML()}`;
   }
   if (S.stab === 'correos') {
     const T = [
@@ -2654,6 +2658,14 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  reloadPage: () => location.reload(),
+  updCheck: async el => { el.disabled = true; S.upd = {loading: true}; renderMain();
+    try { S.upd = await API('GET', '/api/updates/check?force=1'); } catch (ex) { S.upd = {error: ex.message}; } renderMain(); },
+  updApply: async () => {
+    const u = S.upd || {};
+    if (!await confirmDlg('Actualizar la aplicación', `Se instalará la versión <b>${esc(u.version)}</b>. Antes se hace una copia de seguridad de los datos. La aplicación se reiniciará y estará sin servicio alrededor de un minuto; si la versión nueva no arrancase, se volvería sola a la actual.`, 'Actualizar ahora', false)) return;
+    try { await API('POST', '/api/updates/apply'); waitUpdate(u.version); } catch (ex) { toast(ex.message, 'err', 8000); }
+  },
   licCopy: () => { const t = (Store.lic || {}).instalacion || ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Identificador copiado.')).catch(() => toast(t, 'info', 8000)); },
   licInstall: async () => { const t = ($('#lic-text') || {}).value || ''; if (!t.trim()) { toast('Pega el texto de la licencia.', 'warn'); return; }
     try { Store.lic = await API('POST', '/api/license', {texto: t}); toast('Licencia instalada.'); const ta = $('#lic-text'); if (ta) ta.value = ''; renderMain(); } catch (ex) { toast(ex.message, 'err', 8000); } },
@@ -2967,6 +2979,7 @@ document.addEventListener('change', e => {
   if (t.id === 'map-heat') { S.mapHeat = t.value; Map3D.applyHeat(); renderMapSide(); return; }
   if (t.id === 'map-client') { S.mapClient = t.value; Map3D.refresh(); renderMapSide(); return; }
   if (t.id === 'sede-filter') { S.sedeFilter = t.value; sRerender(); return; }
+  if (t.id === 'lic-file' && t.files[0]) { const f = t.files[0]; t.value = ''; f.text().then(txt => { const ta = $('#lic-text'); if (ta) ta.value = txt.trim(); ACT.licInstall(); }); return; }
   if (t.id === 'avadef-file' && t.files[0]) { const f = t.files[0]; t.value = ''; processAvatar(f).then(url => { draft().avatarDefault = url; sRerender(); }).catch(ex => toast(ex.message, 'err')); return; }
   if (t.id === 'fav-file' && t.files[0]) { const f = t.files[0]; t.value = ''; processFavicon(f).then(url => { draft().web.favicon = url; applyWeb(draft().web); sRerender(); }).catch(ex => toast(ex.message, 'err')); return; }
   if (['tr-cliente', 'tr-origen', 'tr-destino'].includes(t.id)) { const T = S.tr = S.tr || {}; T.serials = ($('#tr-serials') || {}).value || ''; T[t.id.slice(3)] = t.value; if (t.id !== 'tr-destino') T.bulk = []; renderMain(); return; }
@@ -4386,7 +4399,8 @@ async function setLang(l, rerender = true) {
 /* ---------- Aviso de licencia ---------- */
 function licBanner() {
   const brand = fullSettings() && Store.settings && Store.settings.company === 'TuEmpresa' ? `<div class="lic-banner">${ico('edit')}<span>Pon el nombre de tu empresa, tu logotipo y tus datos para los albaranes. <a href="#/ajustes/general">Ajustes → General</a></span></div>` : '';
-  return brand + licBanner2();
+  const up = fullSettings() && S.upd && S.upd.nueva && S.view !== 'ajustes' ? `<div class="lic-banner">${ico('down')}<span>Hay una versión nueva de la aplicación (${esc(S.upd.version)}). <a href="#/ajustes/licencia">Ver y actualizar</a></span></div>` : '';
+  return brand + up + licBanner2();
 }
 function licBanner2() {
   const L = Store.lic; if (!L || !L.enforce) return '';
@@ -4396,4 +4410,46 @@ function licBanner2() {
   if (L.mode === 'prueba') return admin ? `<div class="lic-banner">${ico('clock')}<span>Periodo de prueba: quedan ${plural(L.dias, 'día')}.${go}</span></div>` : '';
   if (L.mode === 'activa' && L.dias !== undefined && L.dias <= 30 && admin) return `<div class="lic-banner warn">${ico('clock')}<span>La licencia caduca en ${plural(L.dias, 'día')}.${go}</span></div>`;
   return '';
+}
+
+/* ---------- Actualizaciones desde la web ---------- */
+function updatesPanelHTML() {
+  const L = Store.lic || {}, u = S.upd || null, v = (L.build || {}).version;
+  if (!v) return '';
+  let body;
+  if (!u) body = `<p class="muted" style="margin:0">Comprueba si tu proveedor ha publicado una versión nueva.</p>`;
+  else if (u.loading) body = `<p class="muted" style="margin:0">Buscando…</p>`;
+  else if (u.error) body = `<div class="err-msg">${esc(u.error)}</div>`;
+  else if (u.enabled === false) body = `<p class="muted" style="margin:0">Esta instalación no recibe actualizaciones desde la web. Pide a tu proveedor el paquete de cada versión.</p>`;
+  else if (!u.nueva) body = `<p style="margin:0;color:var(--ok);font-weight:600">${ico('check')} Tienes la última versión (${esc(u.actual)}).</p>`;
+  else body = `<div class="upd-new"><b>Versión ${esc(u.version)} disponible</b>${u.fecha ? `<span class="help"> · publicada el ${fmtDate(u.fecha)}</span>` : ''}
+      ${u.notas ? `<div class="upd-notes">${esc(u.notas).replace(/\n/g, '<br>')}</div>` : ''}
+      ${!u.nodeOk ? `<div class="err-msg">Esta versión necesita Node ${esc(u.node)} y el servidor tiene ${esc(u.nodeActual)}. Instala esa versión de Node antes de actualizar.</div>`
+        : u.autoActualizable ? `<div class="row" style="margin-top:12px"><button class="btn primary" data-act="updApply">${ico('down')}Actualizar ahora</button><span class="help">Se hace copia de seguridad antes. Unos 60 segundos sin servicio.</span></div>`
+        : `<p class="help" style="margin:10px 0 0">Esta instalación no se puede actualizar desde la web. En el servidor: <code>./scripts/actualizar-version.sh</code> con el paquete de la versión.</p>`}</div>`;
+  return `<section class="panel" style="margin-top:18px"><div class="panel-h"><div><h3>Versión y actualizaciones</h3><span class="help">Versión instalada: ${esc(v)}${(L.build || {}).fecha ? ` (${fmtDate(L.build.fecha)})` : ''}</span></div><button class="btn sm" data-act="updCheck">${ico('reset')}Buscar actualizaciones</button></div><div class="panel-b">${body}</div></section>`;
+}
+// Espera a que el servidor vuelva con la versión nueva y recarga la página.
+function waitUpdate(target) {
+  const ov = document.createElement('div'); ov.className = 'upd-overlay';
+  ov.innerHTML = `<div class="upd-box"><div class="sp-bar"><i></i></div><h3>Actualizando a la versión ${esc(target)}…</h3><p class="muted" id="upd-msg">Copiando la versión nueva y reiniciando. No cierres esta página.</p></div>`;
+  document.body.appendChild(ov);
+  const t0 = Date.now(); let down = false;
+  const tick = async () => {
+    let v = null; try { const r = await fetch('/api/version', {cache: 'no-store'}); if (r.ok) v = (await r.json()).version; } catch {}
+    const msg = $('#upd-msg', ov);
+    if (v === null) down = true;
+    if (v === target) { if (msg) msg.textContent = 'Listo. Recargando…'; setTimeout(() => location.reload(), 1200); return; }
+    if (v && down) {
+      // Ha vuelto con otra versión: comprobamos si se ha deshecho la actualización
+      try { const r = await API('GET', '/api/updates/last'); if (r && r.hacia === target && r.resultado === 'revertida') {
+        ov.querySelector('.sp-bar').remove(); ov.querySelector('h3').textContent = 'No se ha podido actualizar';
+        if (msg) msg.innerHTML = `La versión ${esc(target)} no ha arrancado y la aplicación ha vuelto sola a la ${esc(v)}. Tus datos no se han tocado. Avisa a tu proveedor.<br><br><button class="btn primary" data-act="reloadPage">Continuar</button>`;
+        return; } } catch {}
+    }
+    if (Date.now() - t0 > 240000) { if (msg) msg.innerHTML = 'La actualización está tardando más de lo normal. Si la versión nueva no arrancó, la aplicación habrá vuelto sola a la anterior: recarga la página y revisa Ajustes → Licencia, o el registro en <code>backups/actualizacion-*.log</code>.'; return; }
+    if (msg && v === null) msg.textContent = 'Reiniciando la aplicación…';
+    setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 4000);
 }

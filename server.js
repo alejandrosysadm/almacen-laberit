@@ -17,6 +17,7 @@ const totp = require('./lib/totp');
 const secretbox = require('./lib/secretbox');
 const registerOrders = require('./lib/orders');
 const setupLicense = require('./lib/license');
+const setupUpdater = require('./lib/updater');
 const setupAlerts = require('./lib/alerts');
 
 /* ---------------- Configuración ---------------- */
@@ -368,12 +369,13 @@ const api = express.Router();
 
 /* ---------------- Licencia de uso (solo en la versión para clientes) ---------------- */
 const license = setupLicense(CFG.dataDir, db);
+const updater = setupUpdater({ root: __dirname, dataDir: CFG.dataDir, port: CFG.port, tls: !!(CFG.tlsPfx || (CFG.tlsCert && CFG.tlsKey)) });
 let licCache = null, licAt = 0;
 const licStatus = () => { if (!licCache || Date.now() - licAt > 60000) { licCache = license.status(); licAt = Date.now(); } return licCache; };
 // Sin licencia válida, la aplicación queda en solo lectura: se consulta todo, pero no se registra ni modifica nada.
 api.use((req, res, next) => {
   if (!license.enforce || req.method === 'GET' || req.method === 'HEAD') return next();
-  if (/^\/(setup|login|logout|password\/|me\/|me$|license)/.test(req.path)) return next();
+  if (/^\/(setup|login|logout|password\/|me\/|me$|license|updates)/.test(req.path)) return next();
   const L = licStatus();
   if (L.escritura) return next();
   res.status(402).json({ error: L.prueba ? 'El periodo de prueba ha terminado. La aplicación está en solo lectura hasta que se instale una licencia (Ajustes → Licencia).' : 'La licencia ha caducado. La aplicación está en solo lectura hasta que se renueve (Ajustes → Licencia).' });
@@ -784,6 +786,19 @@ function settingsFor(u, st) {
 }
 api.get('/settings', requireAuth, (req, res) => res.json(settingsFor(req.auth.u, storedSettings())));
 api.get('/license', requireAuth, (req, res) => res.json(licStatus()));
+// Versión instalada (pública: la usa la pantalla para saber cuándo ha terminado una actualización)
+api.get('/version', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ version: updater.version || require('./package.json').version }); });
+api.get('/updates/check', requireAuth, requirePerm('settings.manage'), requireTotal, ah(async (req, res) => {
+  if (!updater.enabled) return res.json({ enabled: false });
+  try { res.json(await updater.check(req.query.force === '1')); } catch (e) { throw httpErr(502, e.message); }
+}));
+api.get('/updates/last', requireAuth, requirePerm('settings.manage'), requireTotal, (req, res) => res.json(updater.lastResult() || {}));
+api.post('/updates/apply', requireAuth, requirePerm('settings.manage'), requireTotal, ah(async (req, res) => {
+  if (!updater.enabled) throw httpErr(400, 'Esta instalación no recibe actualizaciones desde la web.');
+  let r; try { r = await updater.apply(req.auth.u.username); } catch (e) { throw httpErr(400, e.message); }
+  audit(req.auth.u.username, 'ajustes', `Actualización a la versión ${r.version} iniciada`);
+  res.json(r);
+}));
 api.post('/license', requireAuth, requirePerm('settings.manage'), requireTotal, (req, res) => {
   if (!license.enforce) throw httpErr(400, 'Esta instalación no usa licencias.');
   let p; try { p = license.install((req.body || {}).texto); } catch (e) { throw httpErr(400, e.message); }
@@ -1250,6 +1265,7 @@ if (CFG.tlsPfx) {
 })();
 mail.setAccent((settings().tema || {}).primario);
 server.listen(CFG.port, CFG.host, () => {
+  updater.markStarted((ok, u) => audit('sistema', 'ajustes', ok ? `Actualizado de la versión ${u.desde} a la ${u.hacia}` : `La versión ${u.hacia} no arrancó: se ha vuelto a la ${u.desde}`));
   console.log(`Almacén Laberit escuchando en ${proto}://${CFG.host === '0.0.0.0' ? 'localhost' : CFG.host}:${CFG.port}`);
   console.log(`Base de datos: ${path.join(CFG.dataDir, 'almacen.db')}`);
   if (countUsers() === 0) console.log(`Sin usuarios todavía: abre la web para crear el administrador${CFG.setupToken ? ' (te pedirá SETUP_TOKEN)' : ''}, o usa "npm run admin -- create-admin <usuario> \"<Nombre>\"".`);

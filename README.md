@@ -348,18 +348,26 @@ Sin `--hasta` no caduca; sin `--usuarios` o `--almacenes` no hay límite. Cada l
 
 ### Generar una versión
 
-    npm run build -- 1.2.0
+    npm run build -- 1.2.0 --url https://raw.githubusercontent.com/alejandrosysadm/almacen-actualizaciones/main/ --privada C:\Licencias-Almacen\licencias-privada.pem --notas "Qué cambia en esta versión"
+
+`--url` es la carpeta pública donde publicas las versiones (las instalaciones la consultan para saber si hay una nueva) y `--privada` firma la versión con tu clave. Sin ellos, la versión se genera igual pero no podrá actualizarse desde la web.
 
 Fija la versión en `package.json` y genera en `dist/`:
 
 - `dist/almacen-1.2.0.tar.gz`: el paquete que se entrega al cliente.
 - `dist/almacen/`: el mismo contenido sin comprimir.
 
-La versión para clientes lleva el servidor compilado a bytecode de V8, la interfaz ofuscada, el control de licencias activado, la guía `INSTALACION.md` y el actualizador, y no lleva herramientas internas. Toda referencia a Laberit y a sus clientes se sustituye por una marca genérica («TuEmpresa», «Cliente de ejemplo», servicio `almacen`), y el administrador ve un aviso hasta que pone el nombre de su empresa en Ajustes. El bytecode solo funciona con la misma versión de Node con la que se compiló: compila con la versión de Node de los servidores de los clientes.
+La licencia se puede instalar pegando el texto o subiendo el archivo `.lic`. La versión para clientes lleva el servidor compilado a bytecode de V8, la interfaz ofuscada, el control de licencias activado, la guía `INSTALACION.md` y el actualizador, y no lleva herramientas internas. Toda referencia a Laberit y a sus clientes se sustituye por una marca genérica («TuEmpresa», «Cliente de ejemplo», servicio `almacen`), y el administrador ve un aviso hasta que pone el nombre de su empresa en Ajustes. El bytecode solo funciona con la misma versión de Node con la que se compiló: compila con la versión de Node de los servidores de los clientes.
 
 Después de generar una versión, haz commit del cambio de `package.json` para que el historial de GitHub marque qué código corresponde a cada versión.
 
-### Actualizar a los clientes
+### Publicar una versión (actualización desde la web)
+
+Además del paquete, la build genera `dist/latest.json`, firmado. Sube **los dos archivos** a la carpeta indicada en `--url` (por ejemplo, un repositorio público de GitHub `almacen-actualizaciones`; lo que se publica es la versión compilada y ofuscada, y sin licencia no se puede usar). Deja allí los paquetes anteriores por si hay que volver a uno.
+
+Los administradores de cada cliente verán el aviso «Hay una versión nueva» y podrán actualizar desde **Ajustes → Licencia → Buscar actualizaciones → Actualizar ahora**. El servidor descarga el paquete, comprueba su huella y tu firma (si no coinciden, no lo instala), hace copia de seguridad, instala y se reinicia. Si la versión nueva no arranca en tres intentos, el lanzador vuelve solo a la anterior y la pantalla lo explica. Requiere Linux con el servicio de systemd (la instalación recomendada); en otro caso se usa el actualizador de consola.
+
+### Actualizar a los clientes desde la consola
 
 Envía el paquete nuevo al cliente. En su servidor:
 
