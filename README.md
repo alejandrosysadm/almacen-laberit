@@ -331,15 +331,41 @@ Para que el script pueda reiniciar el servicio sin pedir contraseña, añade con
 
 ## Versión para clientes y licencias
 
-El código fuente de este repositorio funciona sin control de licencias (instalación propia). Para vender la aplicación a otras empresas se genera una versión protegida:
+El código fuente de este repositorio funciona sin control de licencias y con la marca de Laberit (instalación propia). Para vender la aplicación se genera una versión protegida y con marca genérica.
 
-1. **Claves (una sola vez):** `node scripts/licencias.js claves <carpeta-segura>`. La clave privada se queda en esa carpeta, fuera del repositorio y con copia de seguridad: si se pierde, no se pueden emitir más licencias para las instalaciones existentes. La pública se guarda en `lib/licencia-publica.pem` y sí va en el repositorio.
-2. **Versión para clientes:** `npm run build` genera `dist/almacen-laberit` con el servidor compilado a bytecode de V8 (sin los `.js` originales), la interfaz ofuscada, el control de licencias activado y sin herramientas internas. El bytecode solo funciona con la misma versión de Node con la que se compiló (`engines` en su `package.json`); compílala con la versión de Node de los servidores de los clientes.
-3. **Instalación en el cliente:** copiar `dist/almacen-laberit`, `npm ci --omit=dev` y arrancar como siempre. Sin licencia funciona 30 días de prueba.
-4. **Licencia:** el cliente te envía su «ID de instalación» (Ajustes → Licencia) y generas su licencia:
+### Claves (una sola vez)
 
-        node scripts/licencias.js crear --privada <carpeta-segura>/licencias-privada.pem --cliente "Empresa SL" --hasta 2027-12-31 --usuarios 10 --almacenes 2 --instalacion XXXX-XXXX-XXXX-XXXX
+    node scripts/licencias.js claves C:\Licencias-Almacen
 
-   El texto resultante se pega en Ajustes → Licencia. Sin `--hasta` no caduca; sin `--usuarios` o `--almacenes` no hay límite.
+La clave privada se queda en esa carpeta, **fuera del repositorio y con copia de seguridad**: si se pierde, no se pueden emitir más licencias para las instalaciones existentes. La pública se guarda en `lib/licencia-publica.pem` y sí va en el repositorio.
 
-Al caducar, hay 15 días de gracia con aviso y después la aplicación queda en solo lectura (se consulta y exporta todo, pero no se registra nada) hasta instalar una licencia válida. El archivo `LICENSE` es un modelo de condiciones de uso que debe revisar un abogado.
+### Emitir y consultar licencias
+
+    node scripts/licencias.js crear --privada C:\Licencias-Almacen\licencias-privada.pem --cliente "Empresa SL" --hasta 2027-12-31 --usuarios 10 --almacenes 2 --instalacion XXXX-XXXX-XXXX-XXXX
+    node scripts/licencias.js listar C:\Licencias-Almacen
+
+Sin `--hasta` no caduca; sin `--usuarios` o `--almacenes` no hay límite. Cada licencia emitida se guarda automáticamente en la carpeta de la clave: el texto en `licencias/<cliente>/<LIC-…>.lic` y el registro de todas en `registro-licencias.json` y `registro-licencias.csv` (se abre con Excel).
+
+### Generar una versión
+
+    npm run build -- 1.2.0
+
+Fija la versión en `package.json` y genera en `dist/`:
+
+- `dist/almacen-1.2.0.tar.gz`: el paquete que se entrega al cliente.
+- `dist/almacen/`: el mismo contenido sin comprimir.
+
+La versión para clientes lleva el servidor compilado a bytecode de V8, la interfaz ofuscada, el control de licencias activado, la guía `INSTALACION.md` y el actualizador, y no lleva herramientas internas. Toda referencia a Laberit y a sus clientes se sustituye por una marca genérica («TuEmpresa», «Cliente de ejemplo», servicio `almacen`), y el administrador ve un aviso hasta que pone el nombre de su empresa en Ajustes. El bytecode solo funciona con la misma versión de Node con la que se compiló: compila con la versión de Node de los servidores de los clientes.
+
+Después de generar una versión, haz commit del cambio de `package.json` para que el historial de GitHub marque qué código corresponde a cada versión.
+
+### Actualizar a los clientes
+
+Envía el paquete nuevo al cliente. En su servidor:
+
+    cd /opt/almacen
+    ./scripts/actualizar-version.sh /ruta/almacen-1.2.0.tar.gz
+
+Comprueba el paquete y la versión de Node, hace copia de los datos, guarda la versión actual en `backups/programa-*.tar.gz`, instala la nueva y reinicia. Si no arranca, vuelve sola a la anterior; `./scripts/actualizar-version.sh volver` vuelve a mano. Los datos, la licencia, los certificados y el `.env` no se tocan, y la licencia sigue siendo válida. Las instrucciones completas para el cliente están en `INSTALACION.md`.
+
+Al caducar una licencia hay 15 días de gracia con aviso y después la aplicación queda en solo lectura hasta instalar una licencia válida. El archivo `LICENSE` es un modelo de condiciones de uso que debe revisar un abogado.

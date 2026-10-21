@@ -1241,5 +1241,7 @@ window.I18N_EN = {
 "La licencia permite {n} almacenes. Amplía la licencia para añadir más.": "The licence allows {n} warehouses. Extend the licence to add more.",
 "La firma de la licencia no es válida.": "The licence signature is not valid.",
 "El texto no es una licencia.": "The text is not a licence.",
-"Esta licencia es para otra instalación ({x}).": "This licence is for another installation ({x})."
+"Esta licencia es para otra instalación ({x}).": "This licence is for another installation ({x}).",
+"Pon el nombre de tu empresa, tu logotipo y tus datos para los albaranes.": "Set your company name, logo and delivery note details.",
+"Ajustes → General": "Settings → General"
 };

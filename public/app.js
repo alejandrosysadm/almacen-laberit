@@ -4385,6 +4385,10 @@ async function setLang(l, rerender = true) {
 
 /* ---------- Aviso de licencia ---------- */
 function licBanner() {
+  const brand = fullSettings() && Store.settings && Store.settings.company === 'TuEmpresa' ? `<div class="lic-banner">${ico('edit')}<span>Pon el nombre de tu empresa, tu logotipo y tus datos para los albaranes. <a href="#/ajustes/general">Ajustes → General</a></span></div>` : '';
+  return brand + licBanner2();
+}
+function licBanner2() {
   const L = Store.lic; if (!L || !L.enforce) return '';
   const admin = fullSettings(), go = admin ? ' <a href="#/ajustes/licencia">Ver licencia</a>' : '';
   if (L.mode === 'caducada') return `<div class="lic-banner red">${ico('lock')}<span>${L.prueba ? 'El periodo de prueba ha terminado.' : 'La licencia ha caducado.'} La aplicación está en solo lectura.${admin ? go : ' Avisa a un administrador.'}</span></div>`;
