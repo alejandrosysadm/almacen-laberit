@@ -722,3 +722,8 @@ span.dash-leg{cursor:default}
 .avatar.xl{width:64px;height:64px;font-size:22px;flex:none}
 .ava-edit{display:flex;gap:14px;align-items:center}
 .ava-edit > div{display:flex;flex-direction:column;gap:2px}
+
+.lic-banner{display:flex;gap:10px;align-items:center;padding:10px 14px;border-radius:10px;margin-bottom:16px;font-size:13.5px;background:var(--info-soft,color-mix(in srgb,var(--info) 12%,transparent));border:1px solid color-mix(in srgb,var(--info) 30%,transparent)}
+.lic-banner.warn{background:color-mix(in srgb,var(--warn) 12%,transparent);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.lic-banner.red{background:var(--red-soft);border-color:var(--red-line);color:var(--red-ink);font-weight:600}
+.lic-banner a{font-weight:700;color:inherit}

@@ -16,6 +16,7 @@ const mail = require('./lib/mail');
 const totp = require('./lib/totp');
 const secretbox = require('./lib/secretbox');
 const registerOrders = require('./lib/orders');
+const setupLicense = require('./lib/license');
 const setupAlerts = require('./lib/alerts');
 
 /* ---------------- Configuración ---------------- */
@@ -364,6 +365,19 @@ app.use((req, res, next) => {
 });
 
 const api = express.Router();
+
+/* ---------------- Licencia de uso (solo en la versión para clientes) ---------------- */
+const license = setupLicense(CFG.dataDir, db);
+let licCache = null, licAt = 0;
+const licStatus = () => { if (!licCache || Date.now() - licAt > 60000) { licCache = license.status(); licAt = Date.now(); } return licCache; };
+// Sin licencia válida, la aplicación queda en solo lectura: se consulta todo, pero no se registra ni modifica nada.
+api.use((req, res, next) => {
+  if (!license.enforce || req.method === 'GET' || req.method === 'HEAD') return next();
+  if (/^\/(setup|login|logout|password\/|me\/|me$|license)/.test(req.path)) return next();
+  const L = licStatus();
+  if (L.escritura) return next();
+  res.status(402).json({ error: L.prueba ? 'El periodo de prueba ha terminado. La aplicación está en solo lectura hasta que se instale una licencia (Ajustes → Licencia).' : 'La licencia ha caducado. La aplicación está en solo lectura hasta que se renueve (Ajustes → Licencia).' });
+});
 api.use(express.json({ limit: '50mb' }));
 api.use((req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -769,6 +783,13 @@ function settingsFor(u, st) {
   return out;
 }
 api.get('/settings', requireAuth, (req, res) => res.json(settingsFor(req.auth.u, storedSettings())));
+api.get('/license', requireAuth, (req, res) => res.json(licStatus()));
+api.post('/license', requireAuth, requirePerm('settings.manage'), requireTotal, (req, res) => {
+  if (!license.enforce) throw httpErr(400, 'Esta instalación no usa licencias.');
+  let p; try { p = license.install((req.body || {}).texto); } catch (e) { throw httpErr(400, e.message); }
+  licCache = null; audit(req.auth.u.username, 'ajustes', `Licencia instalada: ${p.cliente || ''}${p.hasta ? ' hasta ' + p.hasta : ' sin caducidad'}`);
+  res.json(licStatus());
+});
 /* --- Responsable de almacén: configura solo sus almacenes y las sedes de sus clientes --- */
 function saveScoped(next, u, what) {
   const s = sanitizeSettings(next);
@@ -810,6 +831,7 @@ api.put('/settings', requireAuth, requirePerm('settings.manage'), requireTotal, 
     const inUse = db.prepare('SELECT DISTINCT role FROM users').all().map(r => r.role).filter(r => !s.roles[r]);
     if (inUse.length) throw httpErr(400, `Hay usuarios con el rol «${inUse[0]}». Cámbiales el rol antes de eliminarlo.`);
   }
+  { const L = licStatus(); if (L.almacenes && (s.almacenes || []).length > L.almacenes) throw httpErr(402, `La licencia permite ${L.almacenes} almacén${L.almacenes === 1 ? '' : 'es'}. Amplía la licencia para añadir más.`); }
   const renamed = applyRenames(settings(), s, req.auth.u.username);
   saveSettings(s);
   mail.setAccent(s.tema && s.tema.primario);
@@ -981,6 +1003,8 @@ function userFields(b, current) {
   return { username, name, email, role, scope, active: b.active === undefined ? (current ? !!current.active : true) : !!b.active, mustChange: !!b.mustChange };
 }
 api.post('/users', requireAuth, requirePerm('users.manage'), requireTotal, ah(async (req, res) => {
+  { const L = licStatus(); const n = db.prepare('SELECT COUNT(*) n FROM users WHERE active = 1').get().n;
+    if (L.usuarios && n >= L.usuarios) throw httpErr(402, `La licencia permite ${L.usuarios} usuarios activos y ya hay ${n}. Desactiva alguno o amplía la licencia.`); }
   const b = req.body || {}, f = userFields(b, null);
   const invite = !!b.invite;
   if (invite) {

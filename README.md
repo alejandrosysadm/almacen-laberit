@@ -327,3 +327,19 @@ El proyecto está preparado para un repositorio privado. El archivo `.gitignore`
 Para que el script pueda reiniciar el servicio sin pedir contraseña, añade con `sudo visudo -f /etc/sudoers.d/almacen` la línea:
 
     laberit ALL=(root) NOPASSWD: /usr/bin/systemctl restart almacen-laberit
+
+
+## Versión para clientes y licencias
+
+El código fuente de este repositorio funciona sin control de licencias (instalación propia). Para vender la aplicación a otras empresas se genera una versión protegida:
+
+1. **Claves (una sola vez):** `node scripts/licencias.js claves <carpeta-segura>`. La clave privada se queda en esa carpeta, fuera del repositorio y con copia de seguridad: si se pierde, no se pueden emitir más licencias para las instalaciones existentes. La pública se guarda en `lib/licencia-publica.pem` y sí va en el repositorio.
+2. **Versión para clientes:** `npm run build` genera `dist/almacen-laberit` con el servidor compilado a bytecode de V8 (sin los `.js` originales), la interfaz ofuscada, el control de licencias activado y sin herramientas internas. El bytecode solo funciona con la misma versión de Node con la que se compiló (`engines` en su `package.json`); compílala con la versión de Node de los servidores de los clientes.
+3. **Instalación en el cliente:** copiar `dist/almacen-laberit`, `npm ci --omit=dev` y arrancar como siempre. Sin licencia funciona 30 días de prueba.
+4. **Licencia:** el cliente te envía su «ID de instalación» (Ajustes → Licencia) y generas su licencia:
+
+        node scripts/licencias.js crear --privada <carpeta-segura>/licencias-privada.pem --cliente "Empresa SL" --hasta 2027-12-31 --usuarios 10 --almacenes 2 --instalacion XXXX-XXXX-XXXX-XXXX
+
+   El texto resultante se pega en Ajustes → Licencia. Sin `--hasta` no caduca; sin `--usuarios` o `--almacenes` no hay límite.
+
+Al caducar, hay 15 días de gracia con aviso y después la aplicación queda en solo lectura (se consulta y exporta todo, pero no se registra nada) hasta instalar una licencia válida. El archivo `LICENSE` es un modelo de condiciones de uso que debe revisar un abogado.

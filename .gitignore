@@ -26,3 +26,6 @@ secretos.env
 *.zip
 .DS_Store
 Thumbs.db
+
+# Versión para clientes (se genera con npm run build)
+dist/

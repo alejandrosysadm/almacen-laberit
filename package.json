@@ -12,12 +12,18 @@
     "admin": "node scripts/admin.js",
     "backup": "node scripts/backup.js",
     "test": "node scripts/test.js",
-    "actualizar": "bash scripts/actualizar.sh"
+    "actualizar": "bash scripts/actualizar.sh",
+    "build": "node scripts/build.js",
+    "licencias": "node scripts/licencias.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
+    "bytenode": "^1.5.7",
     "express": "^4.22.3",
     "nodemailer": "^10.1.1",
     "pdfkit": "^0.20.2"
+  },
+  "devDependencies": {
+    "javascript-obfuscator": "^4.1.1"
   }
 }

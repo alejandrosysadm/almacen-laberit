@@ -80,6 +80,7 @@ const ICONS = {
   columns:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
   shield:'<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>',
   expand:'<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   camera:'<path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="4"/>',
   truck:'<path d="M3 6h11v10H3zM14 9h4l3 3v4h-7"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
   clipboard:'<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 10h6M9 14h6M9 18h4"/>',
@@ -625,6 +626,7 @@ function renderApp() {
     if (!$('#splash')) app.innerHTML = `<div class="empty" style="padding-top:30vh"><h3>Cargando el almacén…</h3><p>Conectando con los datos compartidos.</p></div>`; return;
   }
   saveSplash(); hideSplash();
+  if (Store.lic === undefined && !Store._licLoading) { Store._licLoading = true; API('GET', '/api/license').then(l => { Store.lic = l; if (l.enforce) renderMain(); }).catch(() => { Store.lic = null; }).finally(() => { Store._licLoading = false; }); }
   if (/^#\/reset\//.test(location.hash) && !Store.needsSetup) { if (!$('#reset-form') && !$('#reset-msg')) showReset(location.hash.slice(8)); return; }
   if (Store.needsSetup) { if (!$('#setup-form')) { app.innerHTML = authHTML('setup'); bindAuth('setup'); } return; }
   if (!Auth.user && ($('#forgot-form') || $('#mfa-form'))) return;
@@ -799,7 +801,7 @@ function renderMain() {
   const prevView = main.dataset.view;
   main.dataset.view = S.view;
   if (!canView(S.view)) { main.innerHTML = `<div class="empty"><h3>No tienes acceso a esta sección</h3><p>Pide a un administrador que amplíe los permisos de tu rol.</p></div>`; return; }
-  main.innerHTML = VIEWS[S.view]();
+  main.innerHTML = licBanner() + VIEWS[S.view]();
   if (S.view === 'inicio' && prevView !== 'inicio') dashAnimate(main);
   if (S.view === 'mapa') { Map3D.mount($('#map-stage')); renderMapSide(); }
   if (S.view === 'ajustes' && S.stab === 'almacen') drawLayoutPreview();
@@ -2081,7 +2083,7 @@ const bid = path => 'b-' + path.replace(/[^a-zA-Z0-9_-]/g, '_');
 function bInp(path, type = 'text', attrs = '') { const v = getPath(draft(), path); return `<input class="inp sm" id="${bid(path)}" data-bind="${esc(path)}" data-type="${type}" type="${type === 'number' ? 'number' : type === 'color' ? 'color' : 'text'}" ${type === 'number' ? 'step="any"' : ''} value="${esc(v ?? '')}" ${attrs}>`; }
 function bChk(path, label, attrs = '') { return `<label class="chk"><input type="checkbox" id="${bid(path)}" data-bind="${esc(path)}" data-type="bool" ${getPath(draft(), path) ? 'checked' : ''} ${attrs}>${label ? esc(label) : ''}</label>`; }
 VIEWS.ajustes = () => {
-  const TABS = fullSettings() ? STABS : [['almacen', 'Almacenes'], ['clientes', 'Sedes']];
+  const TABS = fullSettings() ? STABS.concat(Store.lic && Store.lic.enforce ? [['licencia', 'Licencia']] : []) : [['almacen', 'Almacenes'], ['clientes', 'Sedes']];
   if (!TABS.some(t => t[0] === S.stab)) S.stab = TABS[0][0];
   const d = draft(); let body = '';
   if (S.stab === 'general') body = `<section class="panel"><div class="panel-b"><div class="fgrid">
@@ -2221,6 +2223,22 @@ VIEWS.ajustes = () => {
       </div></div></section>`;
   }
   if (S.stab === 'clientes' && !fullSettings()) { const a = body.indexOf('<!--sedes-->'), b = body.indexOf('<!--/sedes-->'); body = a >= 0 && b > a ? body.slice(a + 12, b).replace('style="margin-top:18px"', '') : ''; }
+  if (S.stab === 'licencia') {
+    const L = Store.lic || {};
+    const estado = {activa: ['ok', 'Activa'], gracia: ['warn', 'Caducada: periodo de gracia'], caducada: ['red', L.prueba ? 'Prueba terminada: solo lectura' : 'Caducada: solo lectura'], prueba: ['warn', 'Periodo de prueba']}[L.mode] || ['', L.mode];
+    body = `<section class="panel"><div class="panel-h"><div><h3>Licencia de uso</h3><span class="help">Para renovarla o ampliarla, envía a tu proveedor el identificador de esta instalación.</span></div><span class="badge ${estado[0]}">${esc(estado[1])}</span></div><div class="panel-b">
+      <dl class="kv">
+        ${L.prueba ? `<dt>Prueba</dt><dd>${L.dias > 0 ? `Quedan ${plural(L.dias, 'día')} (hasta el ${fmtDate(L.hasta)})` : `Terminó el ${fmtDate(L.hasta)}`}</dd>` : `<dt>Cliente</dt><dd><b>${esc(L.cliente || '—')}</b></dd>
+        <dt>Válida hasta</dt><dd>${L.hasta ? `${fmtDate(L.hasta)}${L.mode === 'activa' && L.dias !== undefined ? ` (${plural(L.dias, 'día')})` : ''}${L.mode === 'gracia' ? ` <span class="help">· quedan ${plural(L.dias, 'día')} de gracia</span>` : ''}` : 'Sin caducidad'}</dd>
+        <dt>Usuarios activos</dt><dd>${L.usuarios ? `Hasta ${L.usuarios}` : 'Sin límite'}</dd><dt>Almacenes</dt><dd>${L.almacenes ? `Hasta ${L.almacenes}` : 'Sin límite'}</dd>${L.id ? `<dt>Nº de licencia</dt><dd class="serial">${esc(L.id)}</dd>` : ''}`}
+        <dt>ID de instalación</dt><dd><b class="serial">${esc(L.instalacion || '')}</b> <button class="btn sm ghost" data-act="licCopy">${ico('copy')}Copiar</button></dd>
+        ${L.build && L.build.version ? `<dt>Versión</dt><dd>${esc(L.build.version)} (${esc(L.build.fecha)})</dd>` : ''}
+      </dl>
+      ${L.error ? `<div class="err-msg" style="margin-top:12px">La licencia instalada no es válida: ${esc(L.error)}</div>` : ''}
+      <label class="f" style="margin-top:16px">Instalar o renovar la licencia<textarea class="ta serial" id="lic-text" rows="4" placeholder="Pega aquí el texto de la licencia que te ha enviado tu proveedor"></textarea></label>
+      <div class="row" style="margin-top:10px"><span class="spacer"></span><button class="btn primary" data-act="licInstall">${ico('key')}Instalar licencia</button></div>
+    </div></section>`;
+  }
   if (S.stab === 'correos') {
     const T = [
       ['invite', 'Invitación a un usuario nuevo', 'Tu acceso al almacén de {empresa}', 'Hola {nombre},\n\nSe ha creado tu cuenta en el control de almacén de {empresa}. Tu usuario es {usuario}.\n\nElige tu contraseña con el botón de abajo. El enlace caduca en {horas} horas y solo se puede usar una vez.', '{nombre}, {usuario}, {empresa}, {horas}'],
@@ -2636,6 +2654,9 @@ const ACT = {
   almDel: async () => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); if (!A || (A.clientes || []).length) return; if (!await confirmDlg('Eliminar almacén', `Se eliminará «${esc(A.nombre)}» y su distribución al guardar.`, 'Eliminar')) return; d.almacenes = d.almacenes.filter(a => a !== A); S.almSel = d.almacenes[0].id; sRerender(); },
   almCli: el => { const d = draft(); const A = d.almacenes.find(a => a.id === S.almSel); const c = el.dataset.c; A.clientes = (A.clientes || []).filter(x => x !== c); if (el.checked) A.clientes.push(c); const sb = $('#savebar'); sb && sb.classList.toggle('hide', !dirty()); },
   noop: () => {},
+  licCopy: () => { const t = (Store.lic || {}).instalacion || ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Identificador copiado.')).catch(() => toast(t, 'info', 8000)); },
+  licInstall: async () => { const t = ($('#lic-text') || {}).value || ''; if (!t.trim()) { toast('Pega el texto de la licencia.', 'warn'); return; }
+    try { Store.lic = await API('POST', '/api/license', {texto: t}); toast('Licencia instalada.'); const ta = $('#lic-text'); if (ta) ta.value = ''; renderMain(); } catch (ex) { toast(ex.message, 'err', 8000); } },
   avaDefDel: () => { draft().avatarDefault = ''; sRerender(); },
   favDel: () => { draft().web.favicon = ''; applyWeb(draft().web); sRerender(); },
   otAdd: () => { const d = draft(); d.objTypes = d.objTypes || []; const n = d.objTypes.filter(t => t.custom).length + 1; d.objTypes.push({key: 'x_' + newId().slice(-8).toLowerCase(), l: 'Elemento ' + n, w: 1.5, d: 1.5, h: 1, c: '#64748B', custom: true}); sRerender(); },
@@ -4360,4 +4381,15 @@ async function setLang(l, rerender = true) {
     trNode(document.body); document.title = trText(document.title);
   }
   if (rerender && typeof renderApp === 'function' && Store.settings) { const tp = $('#top'); if (tp) tp.dataset.uid = ''; renderApp(); }
+}
+
+/* ---------- Aviso de licencia ---------- */
+function licBanner() {
+  const L = Store.lic; if (!L || !L.enforce) return '';
+  const admin = fullSettings(), go = admin ? ' <a href="#/ajustes/licencia">Ver licencia</a>' : '';
+  if (L.mode === 'caducada') return `<div class="lic-banner red">${ico('lock')}<span>${L.prueba ? 'El periodo de prueba ha terminado.' : 'La licencia ha caducado.'} La aplicación está en solo lectura.${admin ? go : ' Avisa a un administrador.'}</span></div>`;
+  if (L.mode === 'gracia') return `<div class="lic-banner warn">${ico('alert')}<span>La licencia ha caducado. Quedan ${plural(L.dias, 'día')} antes de pasar a solo lectura.${go}</span></div>`;
+  if (L.mode === 'prueba') return admin ? `<div class="lic-banner">${ico('clock')}<span>Periodo de prueba: quedan ${plural(L.dias, 'día')}.${go}</span></div>` : '';
+  if (L.mode === 'activa' && L.dias !== undefined && L.dias <= 30 && admin) return `<div class="lic-banner warn">${ico('clock')}<span>La licencia caduca en ${plural(L.dias, 'día')}.${go}</span></div>`;
+  return '';
 }
